@@ -1,0 +1,27 @@
+﻿<Page x:Class="UnoDemo.MainPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:UnoDemo"
+      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+  <Grid local:ColumnSharedSizeHelper.IsSharedSizeScope="true">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="100"></RowDefinition>
+      <RowDefinition Height="100"></RowDefinition>
+    </Grid.RowDefinitions>
+
+    <Grid x:Name="Grid1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition></ColumnDefinition>
+        <ColumnDefinition Width="*"></ColumnDefinition>
+      </Grid.ColumnDefinitions>
+      <Border Background="Blue" local:ColumnSharedSizeHelper.SharedSizeGroup="S1"></Border>
+    </Grid>
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition></ColumnDefinition>
+        <ColumnDefinition Width="*"></ColumnDefinition>
+      </Grid.ColumnDefinitions>
+      <Button Width="100" local:ColumnSharedSizeHelper.SharedSizeGroup="S1" Click="Button_OnClick"/>
+    </Grid>
+  </Grid>
+</Page>
