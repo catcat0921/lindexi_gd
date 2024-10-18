@@ -12,6 +12,9 @@ var display = XOpenDisplay(IntPtr.Zero);
 var screen = XDefaultScreen(display);
 var rootWindow = XDefaultRootWindow(display);
 
+int major = 2, minor = 0;
+XIQueryVersion(display, ref major, ref minor);
+
 XMatchVisualInfo(display, screen, 32, 4, out var info);
 var visual = info.visual;
 
@@ -107,6 +110,65 @@ XIValuatorClassInfo? touchMajorValuatorClassInfo = null;
 XIValuatorClassInfo? touchMinorValuatorClassInfo = null;
 XIValuatorClassInfo? pressureValuatorClassInfo = null;
 
+//Task.Run(() =>
+//{
+//    Console.ReadLine();
+
+//    // 重新获取触摸宽度高度是可以获取到的
+//    Console.WriteLine("重新获取");
+
+//    unsafe
+//    {
+//        var stopwatch = Stopwatch.StartNew();
+//        var devices = (XIDeviceInfo*) XIQueryDevice(display,
+//            (int) XiPredefinedDeviceId.XIAllMasterDevices, out int num);
+//        stopwatch.Stop();
+//        // 统计到的耗时是 XIQueryDevice 耗时=7297ms
+//        // 似乎没有点击屏幕时，是不会完成 XIQueryDevice 方法的
+//        Console.WriteLine($"XIQueryDevice 耗时={stopwatch.ElapsedMilliseconds}ms");
+
+//        for (var c = 0; c < num; c++)
+//        {
+//            if (devices[c].Use == XiDeviceType.XIMasterPointer)
+//            {
+//                var pointerDevice = devices[c];
+//                Console.WriteLine($"XIMasterPointer Deviceid={pointerDevice.Deviceid}");
+
+//                for (int i = 0; i < pointerDevice.NumClasses; i++)
+//                {
+//                    var xiAnyClassInfo = pointerDevice.Classes[i];
+//                    if (xiAnyClassInfo->Type == XiDeviceClass.XIValuatorClass)
+//                    {
+//                        var xiValuatorClassInfo = *((XIValuatorClassInfo*) xiAnyClassInfo);
+
+//                        Console.WriteLine($"XiValuatorClassInfo Label={xiValuatorClassInfo.Label}({XLib.GetAtomName(display, xiValuatorClassInfo.Label)}) Value={xiValuatorClassInfo.Value}; Max={xiValuatorClassInfo.Max:0.00}; Min={xiValuatorClassInfo.Min:0.00}; Resolution={xiValuatorClassInfo.Resolution})");
+//                    }
+//                }
+
+//                var multiTouchEventTypes = new List<XiEventType>
+//                {
+//                    XiEventType.XI_TouchBegin,
+//                    XiEventType.XI_TouchUpdate,
+//                    XiEventType.XI_TouchEnd,
+
+//                    XiEventType.XI_Motion,
+//                    XiEventType.XI_ButtonPress,
+//                    XiEventType.XI_ButtonRelease,
+//                    XiEventType.XI_Leave,
+//                    XiEventType.XI_Enter,
+//                };
+
+//                XiSelectEvents(display, handle, new Dictionary<int, List<XiEventType>>
+//                {
+//                    [pointerDevice.Deviceid] = multiTouchEventTypes,
+//                });
+//                break;
+//            }
+//        }
+
+//    }
+//});
+
 unsafe
 {
     var devices = (XIDeviceInfo*) XIQueryDevice(display,
@@ -138,9 +200,67 @@ unsafe
             XiEventType.XI_ButtonRelease,
             XiEventType.XI_Leave,
             XiEventType.XI_Enter,
+
+            // 不能这么写，将会出现以下错误
+            // X Error of failed request:  BadValue (integer parameter out of range for operation)
+            // Major opcode of failed request:  131 (XInputExtension)
+            // Minor opcode of failed request:  46 ()
+            // Value in failed request:  0xb
+            // Serial number of failed request:  22
+            // Current serial number in output stream:  23
+            //XiEventType.XI_HierarchyChanged,
         };
 
-        XiSelectEvents(display, handle, new Dictionary<int, List<XiEventType>> { [pointerDevice.Value.Deviceid] = multiTouchEventTypes });
+        XiSelectEvents(display, handle, new Dictionary<int, List<XiEventType>>
+        {
+            [pointerDevice.Value.Deviceid] = multiTouchEventTypes,
+        });
+
+        // 重新注册依然没有触摸宽度高度
+        //Task.Run(() =>
+        //{
+        //    Console.ReadLine();
+        //    Console.WriteLine("重新注册");
+
+        //    XiSelectEvents(display, handle, new Dictionary<int, List<XiEventType>>
+        //    {
+        //        [pointerDevice.Value.Deviceid] = multiTouchEventTypes,
+        //    });
+        //});
+
+        // 以下注册炸掉
+        // X Error of failed request:  BadValue (integer parameter out of range for operation)
+        // Major opcode of failed request:  131 (XInputExtension)
+        // Minor opcode of failed request:  46 ()
+        // Value in failed request:  0xb
+        // Serial number of failed request:  23
+        // Current serial number in output stream:  24
+        //XiSelectEvents(display, rootWindow, new Dictionary<int, List<XiEventType>>()
+        //{
+        //    [(int) XiPredefinedDeviceId.XIAllMasterDevices] = new List<XiEventType>()
+        //    {
+        //        XiEventType.XI_HierarchyChanged,
+        //        XiEventType.XI_DeviceChanged,
+        //    }
+        //});
+
+        // GTK3 gdkdevicemanager-xi2.c
+        // XIEventMask event_mask;
+        // unsigned char mask[2] = { 0 };
+        // XISetMask (mask, XI_HierarchyChanged);
+        // XISetMask (mask, XI_DeviceChanged);
+        // XISetMask (mask, XI_PropertyEvent);
+        // event_mask.deviceid = XIAllDevices;
+        // event_mask.mask_len = sizeof (mask);
+        // event_mask.mask = mask;
+        // _gdk_x11_device_manager_xi2_select_events
+        XiSelectEvents(display, rootWindow, new Dictionary<int, List<XiEventType>>()
+        {
+            [(int) XiPredefinedDeviceId.XIAllDevices] = new List<XiEventType>()
+            {
+                XiEventType.XI_HierarchyChanged,
+            }
+        });
 
         for (int i = 0; i < pointerDevice.Value.NumClasses; i++)
         {
@@ -152,6 +272,10 @@ unsafe
             else if (xiAnyClassInfo->Type == XiDeviceClass.XIScrollClass)
             {
                 scrollers.Add(*((XIScrollClassInfo**) pointerDevice.Value.Classes)[i]);
+            }
+            else if (xiAnyClassInfo->Type == XiDeviceClass.XITouchClass)
+            {
+                Console.WriteLine($"Touch Sourceid={xiAnyClassInfo->Sourceid}");
             }
         }
 
@@ -190,6 +314,8 @@ unsafe
     {
         Console.WriteLine("pointerDevice==null");
     }
+
+    XIFreeDeviceInfo(devices);
 }
 
 // 先获取触摸再显示窗口，依然拿不到触摸宽度高度
@@ -348,6 +474,20 @@ while (true)
                                 IsUp = true,
                             };
                         }
+                    }
+                    else if (xiEvent->evtype == XiEventType.XI_HierarchyChanged)
+                    {
+                        // 没有触发，在丢失触摸宽度高度的情况下，也没有触发
+                        Console.WriteLine($"xiEvent->evtype={xiEvent->evtype}");
+                    }
+                    else if (xiEvent->evtype == XiEventType.XI_DeviceChanged)
+                    {
+                        // 没有触发，在丢失触摸宽度高度的情况下，也没有触发
+                        Console.WriteLine($"xiEvent->evtype={xiEvent->evtype}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"xiEvent->evtype={xiEvent->evtype}");
                     }
 
                     Draw();
