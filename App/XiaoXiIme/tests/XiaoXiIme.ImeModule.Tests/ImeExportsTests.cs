@@ -25,9 +25,13 @@ public class ImeExportsTests
     [Fact]
     public void KeystrokeDiagnosticSnapshot_MatchesExportContract()
     {
-        Assert.Equal(40, Marshal.SizeOf<ImeKeystrokeDiagnosticSnapshot>());
+        Assert.Equal(108, Marshal.SizeOf<ImeKeystrokeDiagnosticSnapshot>());
         Assert.Equal(0, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.Version)).ToInt32());
         Assert.Equal(36, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.LastReturnValue)).ToInt32());
+        Assert.Equal(48, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.UiClassRegistrationErrorCode)).ToInt32());
+        Assert.Equal(52, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.ImeInquireCallCount)).ToInt32());
+        Assert.Equal(72, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.LastImeSetActiveContextValue)).ToInt32());
+        Assert.Equal(104, Marshal.OffsetOf<ImeKeystrokeDiagnosticSnapshot>(nameof(ImeKeystrokeDiagnosticSnapshot.LastImeInquireSelectCaps)).ToInt32());
     }
 
     [Fact]
@@ -36,6 +40,10 @@ public class ImeExportsTests
         const uint vkX = 0x58;
         ImeKeystrokeDiagnostics.Reset();
 
+        var inquireInfo = ImeExportsContract.CreateDefaultInquireInfo();
+        ImeKeystrokeDiagnostics.RecordImeInquire(ImeConstants.ImeVersion0400, 1, inquireInfo);
+        ImeKeystrokeDiagnostics.RecordImeSelect(true);
+        ImeKeystrokeDiagnostics.RecordImeSetActiveContext(true);
         ImeKeystrokeDiagnostics.RecordImeProcessKey(ImeConstants.VkA, true);
         ImeKeystrokeDiagnostics.RecordImeProcessKey(vkX, true);
         ImeKeystrokeDiagnostics.RecordImeToAsciiEx(ImeConstants.VkA, true, false, 2, 2);
@@ -53,6 +61,19 @@ public class ImeExportsTests
         Assert.Equal(1u, snapshot.LastCompositionWriteSucceeded);
         Assert.Equal(2u, snapshot.LastMessageCount);
         Assert.Equal(2u, snapshot.LastReturnValue);
+        Assert.Equal(1u, snapshot.ImeInquireCallCount);
+        Assert.Equal(ImeConstants.ImeVersion0400, snapshot.LastImeInquireSystemInfoFlags);
+        Assert.Equal(1u, snapshot.LastImeInquireReturnValue);
+        Assert.Equal(inquireInfo.Property, snapshot.LastImeInquireProperty);
+        Assert.Equal(inquireInfo.ConversionCaps, snapshot.LastImeInquireConversionCaps);
+        Assert.Equal(inquireInfo.SetCompositionStringCaps, snapshot.LastImeInquireSetCompositionStringCaps);
+        Assert.Equal(inquireInfo.SelectCaps, snapshot.LastImeInquireSelectCaps);
+        Assert.Equal(1u, snapshot.ImeSelectCallCount);
+        Assert.Equal(1u, snapshot.LastImeSelectValue);
+        Assert.Equal(1u, snapshot.ImeSetActiveContextCallCount);
+        Assert.Equal(1u, snapshot.LastImeSetActiveContextValue);
+        Assert.True(snapshot.UiClassRegistrationAttempted <= 1);
+        Assert.True(snapshot.UiClassRegistrationSucceeded <= 1);
 
         ImeKeystrokeDiagnostics.Reset();
         snapshot = ImeKeystrokeDiagnostics.GetSnapshot();
@@ -75,10 +96,11 @@ public class ImeExportsTests
     }
 
     [Fact]
-    public unsafe void ImeInquireManaged_WritesUiClassNameAndReturnsTrue()
+    public unsafe void ImeInquireManaged_WritesUiClassNameWithinNativeBufferAndReturnsTrue()
     {
+        Assert.True(ImeExportsContract.ImeUiClassName.Length < ImeExportsContract.ImeUiClassNameBufferLength);
         var info = stackalloc ImeInquireInfo[1];
-        var className = stackalloc char[80];
+        var className = stackalloc char[ImeExportsContract.ImeUiClassNameBufferLength];
 
         var result = ImeExports.ImeInquireManaged(info, className, 0);
 

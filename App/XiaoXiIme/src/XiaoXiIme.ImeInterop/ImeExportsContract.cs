@@ -3,7 +3,8 @@ namespace XiaoXiIme.ImeInterop;
 public static class ImeExportsContract
 {
     public const string ModuleFileExtension = ".ime";
-    public const string ImeUiClassName = "XiaoXiImeUiWindow";
+    public const int ImeUiClassNameBufferLength = 16;
+    public const string ImeUiClassName = "XiaoXiImeUI";
 
     public static ImeInquireInfo CreateDefaultInquireInfo()
     {

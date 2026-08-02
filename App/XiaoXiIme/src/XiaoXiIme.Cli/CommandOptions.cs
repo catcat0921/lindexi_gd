@@ -79,6 +79,9 @@ internal sealed class IntegrationRunOptions
 
     [Option("keep-installed", Description = "Do not uninstall XiaoXiIme after validation.")]
     public bool KeepInstalled { get; init; }
+
+    [Option("verbose", Description = "Write successful stage details and non-interactive child-process output to the console.")]
+    public bool Verbose { get; init; }
 }
 
 [Command("native-ime-load-probe", Description = "Internal isolated native IME loader probe.")]

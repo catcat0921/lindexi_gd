@@ -18,6 +18,7 @@ internal interface IImeInstaller
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsImeInstaller : IImeInstaller
 {
+    internal const string InstalledImeFileName = "XIAOXI.IME";
     private const uint MoveFileDelayUntilReboot = 0x00000004;
     private static readonly Regex RetiredImeFileNamePattern = new(
         @"\AXiaoXiIme\.retired-\d{8}T\d{6}Z-[0-9a-f]{32}\.ime\z",
@@ -41,7 +42,7 @@ internal sealed class WindowsImeInstaller : IImeInstaller
         }
 
         var sourcePath = Path.GetFullPath(imeFilePath);
-        var installedPath = Path.Combine(Environment.SystemDirectory, Path.GetFileName(sourcePath));
+        var installedPath = Path.Combine(Environment.SystemDirectory, InstalledImeFileName);
         var copied = false;
         if (File.Exists(installedPath))
         {
@@ -166,7 +167,7 @@ internal sealed class WindowsImeInstaller : IImeInstaller
 
             if (uint.TryParse(layoutId, System.Globalization.NumberStyles.HexNumber, null, out var layoutValue))
             {
-                UnloadKeyboardLayout((nint) layoutValue);
+                UnloadKeyboardLayout(ToKeyboardLayoutHandle(layoutValue));
             }
             layouts.DeleteSubKeyTree(layoutId, throwOnMissingSubKey: false);
             removed.Add(layoutId);
@@ -199,10 +200,13 @@ internal sealed class WindowsImeInstaller : IImeInstaller
 
     internal static bool IsExpectedXiaoXiImeFile(string? imeFile) =>
         string.Equals(imeFile, "XiaoXiIme.ime", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(imeFile, WindowsImeInstallationVariantProbe.ShortImeFileName, StringComparison.OrdinalIgnoreCase);
+        || string.Equals(imeFile, InstalledImeFileName, StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsRetiredXiaoXiImeFile(string? fileName) =>
         fileName is not null && RetiredImeFileNamePattern.IsMatch(fileName);
+
+    internal static nint ToKeyboardLayoutHandle(uint layoutId) =>
+        unchecked((nint)(long)(int)layoutId);
 
     internal static string CreateRetiredImeFileName(DateTimeOffset timestamp, Guid id) =>
         $"XiaoXiIme.retired-{timestamp.UtcDateTime:yyyyMMdd'T'HHmmss'Z'}-{id:N}.ime";
@@ -211,7 +215,7 @@ internal sealed class WindowsImeInstaller : IImeInstaller
     {
         var candidates = removedImeFiles
             .Append(primaryImeFileName)
-            .Append(WindowsImeInstallationVariantProbe.ShortImeFileName)
+            .Append(InstalledImeFileName)
             .Concat(Directory.EnumerateFiles(Environment.SystemDirectory, "XiaoXiIme.retired-*.ime")
                 .Select(Path.GetFileName)
                 .Where(IsRetiredXiaoXiImeFile)!)

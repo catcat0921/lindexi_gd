@@ -80,14 +80,14 @@ $env:XIAOXIIME_ENVIRONMENT = "VirtualMachine"
 命令会依次完成：
 
 1. 校验 manifest、文件长度和 SHA-256。
-2. 仅卸载注册表中明确归属于 `XiaoXi IME` / `XiaoXiIme.ime` 的旧布局。
-3. 当前使用 `native\win-x64\ime\XiaoXiIme.ime` 执行已实现的安装路径，并明确报告 x86 注册仍需单独验证。
+2. 仅卸载注册表中明确归属于 `XiaoXi IME`、当前 `XIAOXI.IME` 或旧版 `XiaoXiIme.ime` 的布局。
+3. 当前读取 `native\win-x64\ime\XiaoXiIme.ime`，复制为传统 IMM32 兼容的 `System32\XIAOXI.IME` 后注册，并明确报告 x86 注册仍需单独验证。
 4. 分别使用 x86/x64 ABI Host 验证对应架构的 TSF ABI/vtable 和隔离 COM 激活。
 5. 执行负载中的集成测试程序集，覆盖 Host、IPC 和上层逻辑；真实按键场景会弹出测试窗口，需用户在输入框中用键盘输入 `xx`（不要粘贴），流程会等待最多 60 秒。
 6. 输出单行 JSON 控制台事件并写入完整 JSON 报告。
 7. 默认卸载测试输入法；传入 `--keep-installed` 才保留安装状态，以便继续人工输入测试。
 
-控制台每一行都是独立 JSON，包含 `timestampUtc`、`level`、`stage`、`message` 和 `data`，便于 LLM 或自动化脚本实时判断当前阶段、退出码、标准输出和错误输出。
+控制台每一行都是独立 JSON，包含 `timestampUtc`、`level`、`stage`、`message` 和 `data`。默认情况下，成功阶段只输出摘要，非交互子进程的成功文本不会重复打印；失败阶段仍输出完整 stdout、stderr 和诊断数据，完整结果始终写入报告。需要查看所有成功阶段详情时，可添加 `--verbose`。
 
 安装前会额外输出 `diagnostics-pre-install` 阶段。该阶段完全由 CLI 自身完成，不要求 VM 安装 .NET SDK、Visual Studio、dumpbin 或 Dependencies，内容包括：
 

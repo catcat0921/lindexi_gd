@@ -11,7 +11,20 @@ public static unsafe class ImeExports
     [UnmanagedCallersOnly(EntryPoint = "ImeInquire", CallConvs = [typeof(CallConvStdcall)])]
     public static int ImeInquire(ImeInquireInfo* inquireInfo, char* className, uint systemInfoFlags)
     {
-        return ImeInquireManaged(inquireInfo, className, systemInfoFlags);
+        var result = 0;
+        var info = default(ImeInquireInfo);
+
+        if (ImeUiWindowClass.TryRegister())
+        {
+            result = ImeInquireManaged(inquireInfo, className, systemInfoFlags);
+            if (inquireInfo is not null)
+            {
+                info = *inquireInfo;
+            }
+        }
+
+        ImeKeystrokeDiagnostics.RecordImeInquire(systemInfoFlags, result, info);
+        return result;
     }
 
     internal static int ImeInquireManaged(ImeInquireInfo* inquireInfo, char* className, uint systemInfoFlags)
@@ -26,7 +39,10 @@ public static unsafe class ImeExports
             *inquireInfo = ImeExportsContract.CreateDefaultInquireInfo();
             if (className is not null)
             {
-                CopyNullTerminated(ImeExportsContract.ImeUiClassName, className, 80);
+                CopyNullTerminated(
+                    ImeExportsContract.ImeUiClassName,
+                    className,
+                    ImeExportsContract.ImeUiClassNameBufferLength);
             }
 
             return 1;
@@ -42,6 +58,18 @@ public static unsafe class ImeExports
 
     [UnmanagedCallersOnly(EntryPoint = "ImeConversionList", CallConvs = [typeof(CallConvStdcall)])]
     public static uint ImeConversionList(nint inputContext, char* source, void* destination, uint bufferLength, uint flag) => 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "ImeRegisterWord", CallConvs = [typeof(CallConvStdcall)])]
+    public static int ImeRegisterWord(char* reading, uint style, char* registerWord) => 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "ImeUnregisterWord", CallConvs = [typeof(CallConvStdcall)])]
+    public static int ImeUnregisterWord(char* reading, uint style, char* unregisterWord) => 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "ImeGetRegisterWordStyle", CallConvs = [typeof(CallConvStdcall)])]
+    public static uint ImeGetRegisterWordStyle(uint itemCount, void* styleBuffer) => 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "ImeEnumRegisterWord", CallConvs = [typeof(CallConvStdcall)])]
+    public static uint ImeEnumRegisterWord(nint enumProcedure, char* reading, uint style, char* registerWord, void* data) => 0;
 
     [UnmanagedCallersOnly(EntryPoint = "ImeDestroy", CallConvs = [typeof(CallConvStdcall)])]
     public static int ImeDestroy(uint reserved) => 1;
@@ -71,10 +99,18 @@ public static unsafe class ImeExports
     }
 
     [UnmanagedCallersOnly(EntryPoint = "ImeSelect", CallConvs = [typeof(CallConvStdcall)])]
-    public static int ImeSelect(nint inputContext, int select) => 1;
+    public static int ImeSelect(nint inputContext, int select)
+    {
+        ImeKeystrokeDiagnostics.RecordImeSelect(select != 0);
+        return 1;
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "ImeSetActiveContext", CallConvs = [typeof(CallConvStdcall)])]
-    public static int ImeSetActiveContext(nint inputContext, int active) => 1;
+    public static int ImeSetActiveContext(nint inputContext, int active)
+    {
+        ImeKeystrokeDiagnostics.RecordImeSetActiveContext(active != 0);
+        return 1;
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "ImeSetCompositionString", CallConvs = [typeof(CallConvStdcall)])]
     public static int ImeSetCompositionString(nint inputContext, uint index, void* composition, uint compositionLength, void* reading, uint readingLength) => 0;

@@ -108,8 +108,8 @@ internal static class Win32ImeEditScenario
 {
     private const string KeyboardLayoutsRegistryPath = @"SYSTEM\CurrentControlSet\Control\Keyboard Layouts";
     private const string ExpectedLayoutText = "XiaoXi IME";
-    private const string ExpectedImeFile = "XiaoXiIme.ime";
-    private const uint KlFActivate = 0x00000001;
+    private const string ExpectedImeFile = "XIAOXI.IME";
+    private const string FallbackLayoutId = "00000409";
     private const uint WsOverlappedWindow = 0x00CF0000;
     private const uint WsVisible = 0x10000000;
     private const uint WsChild = 0x40000000;
@@ -117,6 +117,10 @@ internal static class Win32ImeEditScenario
     private const uint EsAutoHScroll = 0x0080;
     private const int SwShow = 5;
     private const uint PmRemove = 0x0001;
+    private const uint WmClose = 0x0010;
+    private const uint WmQuit = 0x0012;
+    private const uint WmKeyDown = 0x0100;
+    private const nuint VkEscape = 0x1B;
     private const uint LoadLibrarySearchSystem32 = 0x00000800;
     private const string ResetDiagnosticsExport = "XiaoXiImeResetKeystrokeDiagnostics";
     private const string GetDiagnosticsExport = "XiaoXiImeGetKeystrokeDiagnostics";
@@ -144,14 +148,16 @@ internal static class Win32ImeEditScenario
     {
         nint window = 0;
         nint keyboardLayout = 0;
+        nint fallbackKeyboardLayout = 0;
         nint imeModule = 0;
         try
         {
             var layoutId = FindInstalledLayoutId();
-            keyboardLayout = LoadKeyboardLayout(layoutId, KlFActivate);
-            if (keyboardLayout == 0)
+
+            fallbackKeyboardLayout = LoadKeyboardLayout(FallbackLayoutId, 0);
+            if (fallbackKeyboardLayout == 0)
             {
-                throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to load XiaoXi IME keyboard layout {layoutId}.");
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to load fallback keyboard layout {FallbackLayoutId}.");
             }
 
             window = CreateWindowEx(
@@ -213,13 +219,6 @@ internal static class Win32ImeEditScenario
             SetForegroundWindow(window);
             SetActiveWindow(window);
             SetFocus(edit);
-            ActivateAndOpenIme(edit, keyboardLayout);
-            PumpMessages();
-
-            if (GetForegroundWindow() != window || GetFocus() != edit)
-            {
-                throw new InvalidOperationException("The integration test could not acquire the foreground window and EDIT focus required for manual keyboard input.");
-            }
 
             imeModule = LoadLibraryEx(ExpectedImeFile, 0, LoadLibrarySearchSystem32);
             if (imeModule == 0)
@@ -229,13 +228,35 @@ internal static class Win32ImeEditScenario
 
             var diagnostics = ImeDiagnosticsExports.Load(imeModule);
             diagnostics.Reset();
-            Console.WriteLine("ACTION real-ime-keystroke-commit: 请在测试窗口中用键盘输入 xx（不要粘贴）。");
+
+            keyboardLayout = LoadKeyboardLayout(layoutId, 0);
+            if (keyboardLayout == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to load XiaoXi IME keyboard layout {layoutId}.");
+            }
+
+            ActivateAndOpenIme(edit, fallbackKeyboardLayout, keyboardLayout);
+            PumpMessages();
+
+            if (GetForegroundWindow() != window || GetFocus() != edit)
+            {
+                throw new InvalidOperationException("The integration test could not acquire the foreground window and EDIT focus required for manual keyboard input.");
+            }
+
+            Console.WriteLine($"IME STATE before input: {GetImeState(edit, keyboardLayout)} {diagnostics.GetSnapshot()}");
+            Console.WriteLine("ACTION real-ime-keystroke-commit: 请在测试窗口中用键盘输入 xx（不要粘贴）；按 Esc 或关闭窗口可立即中止。");
 
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+            DateTime? unexpectedTextObservedAt = null;
             string text;
             do
             {
-                PumpMessages();
+                if (!PumpMessages(window))
+                {
+                    throw new OperationCanceledException(
+                        $"The real IME keystroke test was canceled by the user. {GetImeState(edit, keyboardLayout)} {diagnostics.GetSnapshot()}");
+                }
+
                 text = GetWindowText(edit);
                 if (text == "小希")
                 {
@@ -247,6 +268,20 @@ internal static class Win32ImeEditScenario
 
                     completion.SetResult();
                     return;
+                }
+
+                if (text.Length >= 2)
+                {
+                    unexpectedTextObservedAt ??= DateTime.UtcNow;
+                    if (DateTime.UtcNow - unexpectedTextObservedAt >= TimeSpan.FromMilliseconds(500))
+                    {
+                        throw new InvalidOperationException(
+                            $"The EDIT control received '{text}' instead of the expected IME result '小希'. {GetImeState(edit, keyboardLayout)} {diagnostics.GetSnapshot()}");
+                    }
+                }
+                else
+                {
+                    unexpectedTextObservedAt = null;
                 }
 
                 Thread.Sleep(10);
@@ -273,6 +308,11 @@ internal static class Win32ImeEditScenario
                 UnloadKeyboardLayout(keyboardLayout);
             }
 
+            if (fallbackKeyboardLayout != 0)
+            {
+                UnloadKeyboardLayout(fallbackKeyboardLayout);
+            }
+
             if (imeModule != 0)
             {
                 FreeLibrary(imeModule);
@@ -280,12 +320,29 @@ internal static class Win32ImeEditScenario
         }
     }
 
-    private static void ActivateAndOpenIme(nint edit, nint keyboardLayout)
+    private static void ActivateAndOpenIme(nint edit, nint fallbackKeyboardLayout, nint keyboardLayout)
     {
-        ActivateKeyboardLayout(keyboardLayout, 0);
+        if (ActivateKeyboardLayout(fallbackKeyboardLayout, 0) == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to activate fallback keyboard layout {FallbackLayoutId}.");
+        }
+
+        PumpMessages();
+        var activeKeyboardLayout = GetKeyboardLayout(0);
+        if (activeKeyboardLayout != fallbackKeyboardLayout)
+        {
+            throw new InvalidOperationException(
+                $"Fallback keyboard layout activation did not take effect. ExpectedHkl=0x{fallbackKeyboardLayout:X}, ActiveHkl=0x{activeKeyboardLayout:X}.");
+        }
+
+        if (ActivateKeyboardLayout(keyboardLayout, 0) == 0)
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Unable to activate the XiaoXi IME keyboard layout.");
+        }
+
         PumpMessages();
 
-        var activeKeyboardLayout = GetKeyboardLayout(0);
+        activeKeyboardLayout = GetKeyboardLayout(0);
         if (activeKeyboardLayout != keyboardLayout)
         {
             throw new InvalidOperationException(
@@ -331,7 +388,17 @@ internal static class Win32ImeEditScenario
 
         try
         {
-            return $"ExpectedHkl=0x{expectedKeyboardLayout:X}, ActiveHkl=0x{activeKeyboardLayout:X}, Himc=0x{inputContext:X}, ImeOpen={ImmGetOpenStatus(inputContext)}.";
+            var imeFileName = new StringBuilder(260);
+            var imeFileNameLength = ImmGetIMEFileName(expectedKeyboardLayout, imeFileName, (uint)imeFileName.Capacity);
+            var runtimeImeFile = imeFileNameLength == 0 ? string.Empty : imeFileName.ToString();
+            if (!string.Equals(runtimeImeFile, ExpectedImeFile, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"IMM32 resolved the installed layout to stale IME file '{runtimeImeFile}' instead of '{ExpectedImeFile}'. Restart or restore the VM to clear the keyboard-layout cache, then rerun the new payload.");
+            }
+
+            var property = ImmGetProperty(expectedKeyboardLayout, 0x00000004);
+            return $"ExpectedHkl=0x{expectedKeyboardLayout:X}, ActiveHkl=0x{activeKeyboardLayout:X}, Himc=0x{inputContext:X}, ImeOpen={ImmGetOpenStatus(inputContext)}, ImmIsIme={ImmIsIME(expectedKeyboardLayout)}, ImmImeFile='{runtimeImeFile}', ImmProperty=0x{property:X}.";
         }
         finally
         {
@@ -362,13 +429,22 @@ internal static class Win32ImeEditScenario
         throw new InvalidOperationException("The installed XiaoXi IME keyboard layout was not found in HKLM.");
     }
 
-    private static void PumpMessages()
+    private static bool PumpMessages(nint ownerWindow = 0)
     {
         while (PeekMessage(out var message, 0, 0, 0, PmRemove))
         {
+            if (message.Value == WmQuit
+                || (message.Value == WmClose && (ownerWindow == 0 || message.Window == ownerWindow))
+                || (message.Value == WmKeyDown && message.WParam == VkEscape))
+            {
+                return false;
+            }
+
             TranslateMessage(message);
             DispatchMessage(message);
         }
+
+        return true;
     }
 
     private static string GetWindowText(nint window)
@@ -411,10 +487,27 @@ internal static class Win32ImeEditScenario
         public uint LastCompositionWriteSucceeded;
         public uint LastMessageCount;
         public uint LastReturnValue;
+        public uint UiClassRegistrationAttempted;
+        public uint UiClassRegistrationSucceeded;
+        public uint UiClassRegistrationErrorCode;
+        public uint ImeInquireCallCount;
+        public uint LastImeInquireSystemInfoFlags;
+        public uint ImeSelectCallCount;
+        public uint LastImeSelectValue;
+        public uint ImeSetActiveContextCallCount;
+        public uint LastImeSetActiveContextValue;
+        public uint LastImeInquireReturnValue;
+        public uint LastImeInquirePrivateDataSize;
+        public uint LastImeInquireProperty;
+        public uint LastImeInquireConversionCaps;
+        public uint LastImeInquireSentenceCaps;
+        public uint LastImeInquireUiCaps;
+        public uint LastImeInquireSetCompositionStringCaps;
+        public uint LastImeInquireSelectCaps;
 
         public override readonly string ToString()
         {
-            return $"ImeTraceVersion={Version}, ImeProcessKeyCalls={ImeProcessKeyCallCount}, ImeToAsciiExCalls={ImeToAsciiExCallCount}, LastProcessVk=0x{LastProcessVirtualKey:X}, LastProcessHandled={LastProcessHandled != 0}, LastToAsciiVk=0x{LastToAsciiVirtualKey:X}, LastToAsciiHandled={LastToAsciiHandled != 0}, CompositionWriteSucceeded={LastCompositionWriteSucceeded != 0}, MessageCount={LastMessageCount}, ReturnValue={LastReturnValue}.";
+            return $"ImeTraceVersion={Version}, ImeInquireCalls={ImeInquireCallCount}, LastImeInquireSystemInfoFlags=0x{LastImeInquireSystemInfoFlags:X}, ImeInquireReturnValue={LastImeInquireReturnValue}, ImeInfo={{PrivateDataSize={LastImeInquirePrivateDataSize}, Property=0x{LastImeInquireProperty:X}, ConversionCaps=0x{LastImeInquireConversionCaps:X}, SentenceCaps=0x{LastImeInquireSentenceCaps:X}, UiCaps=0x{LastImeInquireUiCaps:X}, SetCompositionStringCaps=0x{LastImeInquireSetCompositionStringCaps:X}, SelectCaps=0x{LastImeInquireSelectCaps:X}}}, ImeSelectCalls={ImeSelectCallCount}, LastImeSelect={LastImeSelectValue != 0}, ImeSetActiveContextCalls={ImeSetActiveContextCallCount}, LastImeSetActiveContext={LastImeSetActiveContextValue != 0}, ImeProcessKeyCalls={ImeProcessKeyCallCount}, ImeToAsciiExCalls={ImeToAsciiExCallCount}, LastProcessVk=0x{LastProcessVirtualKey:X}, LastProcessHandled={LastProcessHandled != 0}, LastToAsciiVk=0x{LastToAsciiVirtualKey:X}, LastToAsciiHandled={LastToAsciiHandled != 0}, CompositionWriteSucceeded={LastCompositionWriteSucceeded != 0}, MessageCount={LastMessageCount}, ReturnValue={LastReturnValue}, UiClassRegistrationAttempted={UiClassRegistrationAttempted != 0}, UiClassRegistrationSucceeded={UiClassRegistrationSucceeded != 0}, UiClassRegistrationErrorCode={UiClassRegistrationErrorCode}.";
         }
     }
 
@@ -529,6 +622,16 @@ internal static class Win32ImeEditScenario
     [DllImport("imm32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ImmGetOpenStatus(nint inputContext);
+
+    [DllImport("imm32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ImmIsIME(nint keyboardLayout);
+
+    [DllImport("imm32.dll", EntryPoint = "ImmGetIMEFileNameW", CharSet = CharSet.Unicode)]
+    private static extern uint ImmGetIMEFileName(nint keyboardLayout, StringBuilder fileName, uint bufferLength);
+
+    [DllImport("imm32.dll")]
+    private static extern uint ImmGetProperty(nint keyboardLayout, uint index);
 
     [DllImport("imm32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
