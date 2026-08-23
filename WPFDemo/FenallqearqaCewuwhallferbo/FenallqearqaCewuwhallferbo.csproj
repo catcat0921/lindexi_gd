@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WpfLab.WpfRuntime" Version="0.0.0-test.20260823083341.sha82f48d" />    
+    <PackageReference Include="WpfLab.WpfRuntime" Version="0.0.0-test.20260823083341.sha82f48d" />
+    <PackageReference Include="AvalonEdit" Version="6.0.1" />
   </ItemGroup>
 </Project>
