@@ -418,25 +418,6 @@ VM 回传确认安装、原生加载和全部必需导出、x86/x64 TSF ABI 与�
 
 下一轮若 `ImeInquireCalls>=1`，应按返回值和完整 `IMEINFO` 继续判断 Windows 是否接受契约。只有在上述顺序下仍为 0，才调查 `LoadKeyboardLayout` 是否在进程外或其他不可观测实例中查询，以及 Windows 的布局属性缓存触发条件。不得再把本轮零快照解释为 `ImeInquire` 返回失败，也不得重复调查模块实例生命周期。
 
-### 2026-08-02 清零后首次加载仍为零：预加载模块改变真实 IMM32 加载路径
-
-按上一节顺序运行后，版本 4 快照仍全部为 0。这证明简单地在 `LoadKeyboardLayout` 前手工加载并持有 `XIAOXI.IME`，并不能可靠模拟或观测 IMM32 的真实加载流程。结合更早版本 3 在“不预加载、布局激活后再附加”时曾观察到 `ImeInquireCalls=1`，当前证据更符合：测试宿主的主动预加载改变了 Windows 对该布局的加载或缓存路径，使该模块句柄存在本身成为干扰变量。
-
-因此不再继续使用“预加载并清零”的诊断方式。测试宿主改为：
-
-1. 不手工预加载目标 IME；
-2. 让 Windows 完成 `LoadKeyboardLayout`、确定的布局切换、HIMC 打开和消息泵；
-3. 使用 `GetModuleHandle(XIAOXI.IME)` 记录此时模块是否已经由 IMM32 加载；
-4. 随后使用 `LoadLibraryEx` 附加到同一路径，读取已有诊断状态，但不执行 `Reset`；
-5. 日志新增 `ImeModuleLoadedByImm32`。
-
-下一轮按以下方式判断：
-
-- `ImeModuleLoadedByImm32=True` 且 `ImeInquireCalls>=1`：轨迹可信，继续检查返回值和完整 `IMEINFO`；
-- `ImeModuleLoadedByImm32=True` 但全部调用为 0：模块已映射但 Windows 没有进入项目导出，转向加载入口、导出调用契约或系统缓存；
-- `ImeModuleLoadedByImm32=False`：HKL、HIMC 和文件名虽表面正确，但 IMM32 根本没有把 IME 映射到测试进程，应调查 Windows 传统 IME 的运行时加载资格、注册契约和安全策略；
-- 不再通过预加载模块固定实例，也不再在真实加载发生后清零首次调用轨迹。
-
 ## 后续回归验证必须回传的信息
 
 安装问题已闭环，后续仅在修改安装、TSF、IPC、payload 或集成运行流程后执行回归。回归输出至少应包含以下 stage，并保持 `cleanup` 早于 `report`：

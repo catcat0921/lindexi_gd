@@ -220,6 +220,15 @@ internal static class Win32ImeEditScenario
             SetActiveWindow(window);
             SetFocus(edit);
 
+            imeModule = LoadLibraryEx(ExpectedImeFile, 0, LoadLibrarySearchSystem32);
+            if (imeModule == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to load {ExpectedImeFile} from System32 for keystroke diagnostics.");
+            }
+
+            var diagnostics = ImeDiagnosticsExports.Load(imeModule);
+            diagnostics.Reset();
+
             keyboardLayout = LoadKeyboardLayout(layoutId, 0);
             if (keyboardLayout == 0)
             {
@@ -229,21 +238,12 @@ internal static class Win32ImeEditScenario
             ActivateAndOpenIme(edit, fallbackKeyboardLayout, keyboardLayout);
             PumpMessages();
 
-            var imeModuleLoadedByImm32 = GetModuleHandle(ExpectedImeFile) != 0;
-            imeModule = LoadLibraryEx(ExpectedImeFile, 0, LoadLibrarySearchSystem32);
-            if (imeModule == 0)
-            {
-                throw new Win32Exception(Marshal.GetLastPInvokeError(), $"Unable to load {ExpectedImeFile} from System32 for keystroke diagnostics.");
-            }
-
-            var diagnostics = ImeDiagnosticsExports.Load(imeModule);
-
             if (GetForegroundWindow() != window || GetFocus() != edit)
             {
                 throw new InvalidOperationException("The integration test could not acquire the foreground window and EDIT focus required for manual keyboard input.");
             }
 
-            Console.WriteLine($"IME STATE before input: {GetImeState(edit, keyboardLayout)} ImeModuleLoadedByImm32={imeModuleLoadedByImm32}. {diagnostics.GetSnapshot()}");
+            Console.WriteLine($"IME STATE before input: {GetImeState(edit, keyboardLayout)} {diagnostics.GetSnapshot()}");
             Console.WriteLine("ACTION real-ime-keystroke-commit: 请在测试窗口中用键盘输入 xx（不要粘贴）；按 Esc 或关闭窗口可立即中止。");
 
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
