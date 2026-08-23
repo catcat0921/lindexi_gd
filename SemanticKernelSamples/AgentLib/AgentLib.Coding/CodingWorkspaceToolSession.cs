@@ -25,7 +25,7 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
 
     internal CodingWorkspaceToolSession(
         string workspacePath,
-        IReadOnlyList<AITool> tools,
+        IReadOnlyList<ToolRegistration> registrations,
         IAsyncDisposable? asyncDisposable = null)
     {
 
@@ -33,20 +33,27 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
         {
             throw new ArgumentException("工作区路径不能为空。", nameof(workspacePath));
         }
-        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(registrations);
 
         WorkspacePath = workspacePath;
         _asyncDisposable = asyncDisposable;
-        Tools = Array.AsReadOnly(tools.ToArray());
+        ToolRegistrations = Array.AsReadOnly(registrations.ToArray());
+        Tools = Array.AsReadOnly(ToolRegistrations.Select(registration => registration.Tool).ToArray());
+        ToolRegistrationRegistry = new ToolRegistrationRegistry(ToolRegistrations);
     }
 
     public string WorkspacePath { get; }
 
     public IReadOnlyList<AITool> Tools { get; }
 
+    public IReadOnlyList<ToolRegistration> ToolRegistrations { get; }
+
+    public ToolRegistrationRegistry ToolRegistrationRegistry { get; }
+
     public static async Task<CodingWorkspaceToolSession> CreateAsync(
         string workspacePath,
         string languageServerCommand,
+        IReadOnlyList<ICodingWorkspaceToolSource> additionalToolSources,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(workspacePath))
@@ -79,8 +86,12 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
             }
 
             var dotNetCliTools = new DotNetCliTools(fullWorkspacePath);
-            IReadOnlyList<AITool> dotNetTools = dotNetCliTools.AsAITools();
+            IReadOnlyList<ToolRegistration> dotNetTools = dotNetCliTools.AsToolRegistrations();
+            var dotNetApiTools = new DotNetApiTools(fullWorkspacePath);
             var contentTools = new CodingWorkspaceContentTools(fullWorkspacePath);
+            IReadOnlyList<ToolRegistration> additionalTools = additionalToolSources
+                .SelectMany(source => source.CreateToolRegistrations(fullWorkspacePath))
+                .ToArray();
             try
             {
                 roslynTools = await RoslynAgentTools
@@ -92,16 +103,18 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
                 roslynTools = RoslynAgentTools.CreateUnavailable(fullWorkspacePath);
             }
 
-            IReadOnlyList<AITool> tools =
+            IReadOnlyList<ToolRegistration> registrations =
             [
-                .. roslynTools.AsAITools(),
-                .. workspaceTools.CreateDefaultTools(),
+                .. roslynTools.AsToolRegistrations(),
+                .. workspaceTools.CreateDefaultToolRegistrations(),
                 .. dotNetTools,
-                .. contentTools.AsAITools(),
+                .. dotNetApiTools.AsToolRegistrations(),
+                .. contentTools.AsToolRegistrations(),
+                .. additionalTools,
             ];
             return new CodingWorkspaceToolSession(
                 fullWorkspacePath,
-                tools,
+                registrations,
                 roslynTools);
         }
         catch

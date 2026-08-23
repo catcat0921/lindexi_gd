@@ -1,4 +1,7 @@
+using System.Net;
+using System.Text;
 using WinRemoteShell.Client;
+using WinRemoteShell.Shared;
 
 namespace WinRemoteShell.Tests;
 
@@ -7,18 +10,206 @@ namespace WinRemoteShell.Tests;
 public sealed class ServerIntegrationTests
 {
     [TestMethod]
-    public async Task WhenExecRunsTwiceThenCmdStateIsPreserved()
+    public async Task WhenDirectoryChangesThenListUsesNewWorkingDirectory()
     {
         await using var host = await TestServerHost.StartAsync();
         var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
-        using var firstOutput = new StringWriter();
-        using var secondOutput = new StringWriter();
 
-        await ExecClient.ExecuteAsync(host.Address, ["cd", "/d", directory], null, firstOutput);
-        await ExecClient.ExecuteAsync(host.Address, ["cd"], null, secondOutput);
+        await ChangeDirectoryClient.ChangeAsync(host.Address, directory);
+        var listing = await ListClient.ListAsync(host.Address);
 
-        StringAssert.Contains(secondOutput.ToString(), directory);
+        Assert.AreEqual(directory, listing.Path);
+    }
+
+    [TestMethod]
+    public async Task WhenDirectoryIsListedThenStructuredEntriesAreReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var filePath = Path.Combine(directory, "content.txt");
+        await File.WriteAllTextAsync(filePath, "content");
+        var file = new FileInfo(filePath);
+        await ChangeDirectoryClient.ChangeAsync(host.Address, directory);
+
+        var listing = await ListClient.ListAsync(host.Address);
+
+        Assert.AreEqual(
+            new RemoteDirectoryEntry(
+                file.Name,
+                file.FullName,
+                false,
+                file.Length,
+                file.CreationTimeUtc,
+                file.LastWriteTimeUtc),
+            listing.Entries.Single());
+    }
+
+    [TestMethod]
+    public async Task WhenAbsoluteDirectoryIsSpecifiedThenThatDirectoryIsListed()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "absolute.txt"), "content");
+
+        var listing = await ListClient.ListAsync(host.Address, directory);
+
+        Assert.AreEqual("absolute.txt", listing.Entries.Single().Name);
+    }
+
+    [TestMethod]
+    public async Task WhenRelativeDirectoryIsSpecifiedThenItIsResolvedFromWorkingDirectory()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var child = Path.Combine(root, "child");
+        Directory.CreateDirectory(child);
+        await File.WriteAllTextAsync(Path.Combine(child, "relative.txt"), "content");
+        await ChangeDirectoryClient.ChangeAsync(host.Address, root);
+
+        var listing = await ListClient.ListAsync(host.Address, "child");
+
+        Assert.AreEqual("relative.txt", listing.Entries.Single().Name);
+    }
+
+    [TestMethod]
+    public async Task WhenDirectoryIsSpecifiedThenWorkingDirectoryIsUnchanged()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var child = Path.Combine(root, "child");
+        Directory.CreateDirectory(child);
+        await ChangeDirectoryClient.ChangeAsync(host.Address, root);
+
+        await ListClient.ListAsync(host.Address, child);
+        var listing = await ListClient.ListAsync(host.Address);
+
+        Assert.AreEqual(root, listing.Path);
+    }
+
+    [TestMethod]
+    public async Task WhenExecRunsExecutableThenOutputIsReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var output = new StringWriter();
+
+        await ExecClient.ExecuteAsync(host.Address, ["where.exe", "cmd.exe"], null, output);
+
+        StringAssert.Contains(output.ToString(), "cmd.exe");
+    }
+
+    [TestMethod]
+    public async Task WhenExecRunsExecutableFromWorkingDirectoryThenItIsFoundFirst()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var executableName = $"where-{Guid.NewGuid():N}.exe";
+        File.Copy(Path.Combine(Environment.SystemDirectory, "where.exe"), Path.Combine(directory, executableName));
+        await ChangeDirectoryClient.ChangeAsync(host.Address, directory);
+        using var output = new StringWriter();
+
+        await ExecClient.ExecuteAsync(host.Address, [executableName, "cmd.exe"], null, output);
+
+        StringAssert.Contains(output.ToString(), "cmd.exe");
+    }
+
+    [TestMethod]
+    public async Task WhenExecRunsCmdExplicitlyThenShellCommandIsSupported()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var output = new StringWriter();
+
+        await ExecClient.ExecuteAsync(
+            host.Address,
+            ["cmd.exe", "/D", "/C", "echo explicit-cmd"],
+            null,
+            output);
+
+        StringAssert.Contains(output.ToString(), "explicit-cmd");
+    }
+
+    [TestMethod]
+    public async Task WhenExecFailsThenExceptionIsReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var output = new StringWriter();
+        var executable = $"missing-{Guid.NewGuid():N}.exe";
+
+        await ExecClient.ExecuteAsync(host.Address, [executable], null, output);
+
+        StringAssert.Contains(output.ToString(), executable);
+    }
+
+    [TestMethod]
+    public async Task WhenExecStartsThenChangedWorkingDirectoryIsUsed()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        using var output = new StringWriter();
+        await ChangeDirectoryClient.ChangeAsync(host.Address, directory);
+
+        await ExecClient.ExecuteAsync(host.Address, ["cmd.exe", "/D", "/C", "cd"], null, output);
+
+        StringAssert.Contains(output.ToString(), directory);
+    }
+
+    [TestMethod]
+    public async Task WhenExecSpecifiesAbsoluteWorkingDirectoryThenItIsUsed()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        using var output = new StringWriter();
+
+        await ExecClient.ExecuteAsync(
+            host.Address,
+            ["cmd.exe", "/D", "/C", "cd"],
+            null,
+            output,
+            directory);
+
+        StringAssert.Contains(output.ToString(), directory);
+    }
+
+    [TestMethod]
+    public async Task WhenExecSpecifiesRelativeWorkingDirectoryThenItIsResolvedFromCurrentDirectory()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var directory = Path.Combine(root, "child");
+        Directory.CreateDirectory(directory);
+        await ChangeDirectoryClient.ChangeAsync(host.Address, root);
+        using var output = new StringWriter();
+
+        await ExecClient.ExecuteAsync(
+            host.Address,
+            ["cmd.exe", "/D", "/C", "cd"],
+            null,
+            output,
+            "child");
+
+        StringAssert.Contains(output.ToString(), directory);
+    }
+
+    [TestMethod]
+    public async Task WhenExecTimesOutThenDirectProcessStops()
+    { 
+        await using var host = await TestServerHost.StartAsync();
+        using var output = new StringWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await ExecClient.ExecuteAsync(
+            host.Address,
+            ["ping.exe", "-t", "127.0.0.1"],
+            1,
+            output,
+            cancellationSource.Token);
+
+        Assert.IsFalse(cancellationSource.IsCancellationRequested);
     }
 
     [TestMethod]
@@ -111,17 +302,181 @@ public sealed class ServerIntegrationTests
     }
 
     [TestMethod]
-    public async Task WhenShellExitsThenCmdRemainsAvailableToExec()
+    public async Task WhenDirectoryIsPushedWithMergeThenExistingExtraFileIsPreserved()
     {
         await using var host = await TestServerHost.StartAsync();
-        using var shellInput = new StringReader("echo shell-ready\nexit\n");
-        using var shellOutput = new StringWriter();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var remote = Path.Combine(root, "remote");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(remote);
+        await File.WriteAllTextAsync(Path.Combine(source, "content.txt"), "new content");
+        var extraFile = Path.Combine(remote, "extra.txt");
+        await File.WriteAllTextAsync(extraFile, "existing content");
+
+        await PushClient.PushAsync(host.Address, source, remote, PushMode.Merge);
+
+        Assert.IsTrue(File.Exists(extraFile));
+    }
+
+    [TestMethod]
+    public async Task WhenDirectoryIsPushedWithReplaceThenExistingExtraFileIsDeleted()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var remote = Path.Combine(root, "remote");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(remote);
+        await File.WriteAllTextAsync(Path.Combine(source, "content.txt"), "new content");
+        var extraFile = Path.Combine(remote, "extra.txt");
+        await File.WriteAllTextAsync(extraFile, "existing content");
+
+        await PushClient.PushAsync(host.Address, source, remote, PushMode.Replace);
+
+        Assert.IsFalse(File.Exists(extraFile));
+    }
+
+    [TestMethod]
+    public async Task WhenEmptySourceIsPushedWithReplaceThenRemoteDirectoryIsDeleted()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var remote = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(remote);
+        await File.WriteAllTextAsync(Path.Combine(remote, "content.txt"), "existing content");
+
+        await PushClient.PushAsync(host.Address, string.Empty, remote, PushMode.Replace);
+
+        Assert.IsFalse(Directory.Exists(remote));
+    }
+
+    [TestMethod]
+    public async Task WhenTargetExistsAndFailIfExistsIsUsedThenPushIsRejected()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var remote = Path.Combine(root, "remote");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(remote);
+        await File.WriteAllTextAsync(Path.Combine(source, "content.txt"), "new content");
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            PushClient.PushAsync(host.Address, source, remote, PushMode.FailIfExists));
+
+        Assert.AreEqual(HttpStatusCode.Conflict, exception.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task WhenConsoleInputBlocksWaitingForNextLineThenShellOutputIsStillReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new BlockingInteractiveTextReader("echo blocking-console-input");
+        using var shellOutput = new ObservableTextWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = Task.Run(() =>
+            ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token));
+
+        await shellOutput.WaitForTextAsync("blocking-console-input", TimeSpan.FromSeconds(5));
+        shellInput.SubmitExit();
+        await shellTask;
+    }
+
+    [TestMethod]
+    public async Task WhenShellRunsEchoThenOutputIsReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new InteractiveTextReader();
+        using var shellOutput = new ObservableTextWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token);
+
+        await shellInput.WriteLineAsync("echo shell-echo", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("shell-echo", TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("exit", cancellationSource.Token);
+        await shellTask;
+    }
+
+    [TestMethod]
+    public async Task WhenShellRunsMultipleCommandsThenEachOutputIsReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new InteractiveTextReader();
+        using var shellOutput = new ObservableTextWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token);
+
+        await shellInput.WriteLineAsync("echo shell-first", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("shell-first", TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("echo shell-second", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("shell-second", TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("exit", cancellationSource.Token);
+
+        await shellTask;
+    }
+
+    [TestMethod]
+    public async Task WhenShellReturnsLongUnicodeOutputThenContentIsNotCorrupted()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new InteractiveTextReader();
+        using var shellOutput = new ObservableTextWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token);
+        const string expectedLine = "远程终端中文输出";
+        var script = $"foreach ($i in 1..600) {{ '{expectedLine}' }}";
+        var encodedScript = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
+        await shellInput.WriteLineAsync(
+            $"powershell.exe -NoProfile -EncodedCommand {encodedScript}",
+            cancellationSource.Token);
+        await shellInput.WriteLineAsync("echo unicode-output-complete", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("unicode-output-complete", TimeSpan.FromSeconds(10));
+        await shellOutput.WaitForTextAsync(
+            string.Concat(Enumerable.Repeat(expectedLine + Environment.NewLine, 500)),
+            TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("exit", cancellationSource.Token);
+        await shellTask;
+    }
+
+    [TestMethod]
+    public async Task WhenShellChangesDirectoryThenListUsesShellWorkingDirectory()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new InteractiveTextReader();
+        using var shellOutput = new ObservableTextWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token);
+        var directory = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        await shellInput.WriteLineAsync($"cd /d \"{directory}\"", cancellationSource.Token);
+        await shellInput.WriteLineAsync("echo directory-changed", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("directory-changed", TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("exit", cancellationSource.Token);
+        await shellTask;
+        var listing = await ListClient.ListAsync(host.Address, cancellationToken: cancellationSource.Token);
+
+        Assert.AreEqual(directory, listing.Path);
+    }
+
+    [TestMethod]
+    public async Task WhenShellExitsThenDirectExecRemainsAvailable()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        using var shellInput = new InteractiveTextReader();
+        using var shellOutput = new ObservableTextWriter();
         using var execOutput = new StringWriter();
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var shellTask = ShellClient.RunAsync(host.Address, shellInput, shellOutput, cancellationSource.Token);
 
-        await ShellClient.RunAsync(host.Address, shellInput, shellOutput);
-        await ExecClient.ExecuteAsync(host.Address, ["echo", "exec-ready"], null, execOutput);
+        await shellInput.WriteLineAsync("echo shell-ready", cancellationSource.Token);
+        await shellOutput.WaitForTextAsync("shell-ready", TimeSpan.FromSeconds(5));
+        await shellInput.WriteLineAsync("exit", cancellationSource.Token);
+        await shellTask;
+        await ExecClient.ExecuteAsync(host.Address, ["where.exe", "cmd.exe"], null, execOutput, cancellationSource.Token);
 
-        StringAssert.Contains(execOutput.ToString(), "exec-ready");
+        StringAssert.Contains(execOutput.ToString(), "cmd.exe");
     }
 
     [TestMethod]
@@ -136,5 +491,48 @@ public sealed class ServerIntegrationTests
         await file.ReadExactlyAsync(header);
 
         CollectionAssert.AreEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, header);
+    }
+
+    [TestMethod]
+    public async Task WhenProcessesAreListedThenCurrentProcessIsReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var currentProcessId = Environment.ProcessId;
+
+        var response = await ProcessClient.ListAsync(host.Address, false);
+
+        Assert.IsTrue(response.Processes.Any(process => process.Id == currentProcessId));
+    }
+
+    [TestMethod]
+    public async Task WhenProcessesAreListedWithoutDetailsThenOptionalFieldsAreEmpty()
+    {
+        await using var host = await TestServerHost.StartAsync();
+
+        var response = await ProcessClient.ListAsync(host.Address, false);
+        var currentProcess = response.Processes.Single(process => process.Id == Environment.ProcessId);
+
+        Assert.IsNull(currentProcess.WorkingSetBytes);
+    }
+
+    [TestMethod]
+    public async Task WhenUnknownProcessIdIsKilledThenNoProcessesAreReturned()
+    {
+        await using var host = await TestServerHost.StartAsync();
+
+        var response = await KillClient.KillAsync(host.Address, int.MaxValue, null, false);
+
+        Assert.IsEmpty(response.Processes);
+    }
+
+    [TestMethod]
+    public async Task WhenKillHasNoTargetThenRequestIsRejected()
+    {
+        await using var host = await TestServerHost.StartAsync();
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            KillClient.KillAsync(host.Address, null, null, false));
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, exception.StatusCode);
     }
 }

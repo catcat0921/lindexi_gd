@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
@@ -24,10 +25,13 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     private readonly CopilotChatManager? _chatManager;
     private readonly CodingChatApplication? _application;
     private readonly CodingWorkspaceController? _workspaceController;
-    private readonly string _modelStatusText;
+    private string _modelStatusText;
     private CopilotChatSession? _subscribedSession;
+    private LanguageModelOptionViewModel? _selectedModel;
     private string _inputText = string.Empty;
     private string? _runStatusText;
+    private bool _isLoopIterationEnabled;
+    private bool _isAutomaticCompressionEnabled = true;
     private bool _isDisposed;
 
     /// <summary>
@@ -53,13 +57,14 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         _chatManager = chatManager;
         _application = application;
         _modelStatusText = statusText;
-        SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend);
+        SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         _chatManager.PropertyChanged += OnChatManagerPropertyChanged;
         _application.StateChanged += OnApplicationStateChanged;
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
+        InitializeAvailableModels();
         AttachSession(_chatManager.SelectedSession);
     }
 
@@ -76,7 +81,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         _application = application;
         _workspaceController = workspaceController;
         _modelStatusText = statusText;
-        SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend);
+        SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
         ApplyWorkspaceCommand = new SimpleAsyncCommand(ApplyWorkspaceAsync, () => CanApplyWorkspace);
@@ -84,6 +89,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         _application.StateChanged += OnApplicationStateChanged;
         _workspaceController.PropertyChanged += OnWorkspaceControllerPropertyChanged;
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
+        InitializeAvailableModels();
         AttachSession(_chatManager.SelectedSession);
     }
 
@@ -101,6 +107,38 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前状态说明。
     /// </summary>
     public string StatusText => _runStatusText ?? _modelStatusText;
+
+    /// <summary>
+    /// 获取当前进程可用的语言模型。
+    /// </summary>
+    public ObservableCollection<LanguageModelOptionViewModel> AvailableModels { get; } = [];
+
+    /// <summary>
+    /// 获取或设置当前对话使用的语言模型。
+    /// </summary>
+    public LanguageModelOptionViewModel? SelectedModel
+    {
+        get => _selectedModel;
+        set
+        {
+            if (value is null || !AvailableModels.Contains(value) || !SetField(ref _selectedModel, value))
+            {
+                return;
+            }
+
+            if (_chatManager is not null)
+            {
+                _chatManager.AgentApiEndpointManager.PrimaryModel = value.Model;
+                _modelStatusText = $"当前模型：{value.DisplayName}";
+                OnPropertyChanged(nameof(StatusText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取发送按钮文本。
+    /// </summary>
+    public string SendButtonText => IsRunning ? "插话" : "发送";
 
     /// <summary>
     /// 获取消息投影集合。
@@ -129,6 +167,36 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// 获取或设置下一次发送是否启用循环迭代。
+    /// </summary>
+    public bool IsLoopIterationEnabled
+    {
+        get => _isLoopIterationEnabled;
+        set
+        {
+            if (SetField(ref _isLoopIterationEnabled, value))
+            {
+                if (_application is not null)
+                {
+                    _application.IsLoopIterationEnabled = value;
+                }
+
+                OnPropertyChanged(nameof(CanSend));
+                RaiseCommandCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取或设置发送消息时是否自动压缩对话历史。
+    /// </summary>
+    public bool IsAutomaticCompressionEnabled
+    {
+        get => _isAutomaticCompressionEnabled;
+        set => SetField(ref _isAutomaticCompressionEnabled, value);
+    }
+
+    /// <summary>
     /// 获取发送命令。
     /// </summary>
     public ICommand SendCommand { get; }
@@ -152,7 +220,9 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取是否可发送消息。
     /// </summary>
     public bool CanSend => _application?.CanSend == true
-        && (!string.IsNullOrWhiteSpace(InputText) || PendingImages.Count > 0);
+        && (IsLoopIterationEnabled
+            ? !string.IsNullOrWhiteSpace(InputText)
+            : !string.IsNullOrWhiteSpace(InputText) || PendingImages.Count > 0);
 
     /// <summary>
     /// 获取当前对话是否可以压缩。
@@ -208,6 +278,28 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前是否可以应用工作路径。
     /// </summary>
     public bool CanApplyWorkspace => _workspaceController is not null && !IsChangingWorkspace;
+
+    private void InitializeAvailableModels()
+    {
+        if (_chatManager is null)
+        {
+            return;
+        }
+
+        foreach (var model in _chatManager.AgentApiEndpointManager.GetSupportedModels())
+        {
+            AvailableModels.Add(new LanguageModelOptionViewModel(model));
+        }
+
+        if (AvailableModels.Count == 0)
+        {
+            return;
+        }
+
+        var primaryModel = _chatManager.AgentApiEndpointManager.PrimaryModel;
+        _selectedModel = AvailableModels.First(option => ReferenceEquals(option.Model, primaryModel));
+        _modelStatusText = $"当前模型：{_selectedModel.DisplayName}";
+    }
 
     /// <summary>
     /// 尝试添加一张待发送图片。
@@ -345,6 +437,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanCompressConversation));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(IsCompressing));
+        OnPropertyChanged(nameof(SendButtonText));
         RaiseCommandCanExecuteChanged();
     }
 
@@ -399,14 +492,32 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         }
 
         CopilotChatSession? session = _subscribedSession;
+        string loopPrompt = InputText;
+        bool isInterruption = IsRunning;
+        bool runLoopIteration = IsLoopIterationEnabled && !isInterruption;
+
         InputText = string.Empty;
         PendingImages.Clear();
-        _runStatusText = "正在运行";
+        _runStatusText = isInterruption ? "正在提交插话" : "正在运行";
         OnPropertyChanged(nameof(StatusText));
         try
         {
-            await _application.SendMessageAsync(contents).ConfigureAwait(true);
-            _runStatusText = null;
+            if (runLoopIteration)
+            {
+                await _application
+                    .RunLoopIterationAsync(loopPrompt)
+                    .ConfigureAwait(true);
+            }
+            else
+            {
+                await _application
+                .SendMessageAsync(contents, IsAutomaticCompressionEnabled)
+                .ConfigureAwait(true);
+            }
+
+            _runStatusText = isInterruption && IsRunning
+                ? "插话已提交，等待 Agent 处理"
+                : IsRunning ? "正在运行" : null;
         }
         catch (OperationCanceledException)
         {

@@ -10,6 +10,11 @@ public sealed class CmdProcess : IAsyncDisposable
     private Process? _process;
     private Channel<string>? _output;
 
+    /// <summary>
+    /// Starts the command process if it is not already running.
+    /// </summary>
+    public void EnsureRunning() => EnsureStarted();
+
     public async IAsyncEnumerable<string> ExecuteAsync(
         IReadOnlyList<string> arguments,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -42,6 +47,27 @@ public sealed class CmdProcess : IAsyncDisposable
         await _process.StandardInput.FlushAsync(cancellationToken);
     }
 
+    public async Task<string> GetWorkingDirectoryAsync(CancellationToken cancellationToken = default)
+    {
+        const string prefix = "__WINRS_CWD__";
+        await foreach (var line in ExecuteAsync([$"echo {prefix}%CD%"], cancellationToken))
+        {
+            var prefixIndex = line.IndexOf(prefix, StringComparison.Ordinal);
+            if (prefixIndex < 0)
+            {
+                continue;
+            }
+
+            var path = line[(prefixIndex + prefix.Length)..];
+            if (!path.Contains("%CD%", StringComparison.Ordinal))
+            {
+                return path;
+            }
+        }
+
+        throw new InvalidOperationException("The command process did not return its working directory.");
+    }
+
     public async IAsyncEnumerable<string> ReadOutputAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -53,21 +79,6 @@ public sealed class CmdProcess : IAsyncDisposable
                 yield return line;
             }
         }
-    }
-
-    public async Task InterruptOrRestartAsync(CancellationToken cancellationToken = default)
-    {
-        EnsureStarted();
-        await _process!.StandardInput.WriteAsync("\u0003".AsMemory(), cancellationToken);
-        await _process.StandardInput.FlushAsync(cancellationToken);
-        await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
-        Restart();
-    }
-
-    public void Restart()
-    {
-        Stop();
-        Start();
     }
 
     public ValueTask DisposeAsync()

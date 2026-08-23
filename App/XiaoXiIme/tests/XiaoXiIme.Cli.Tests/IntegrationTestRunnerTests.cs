@@ -115,6 +115,14 @@ public sealed class IntegrationTestRunnerTests
     }
 
     [Fact]
+    public void CreateLayoutTipUsesLanguageIdFromInstalledKeyboardLayout()
+    {
+        var result = WindowsImeInstaller.CreateLayoutTip("E0200804");
+
+        Assert.Equal("0804:E0200804", result);
+    }
+
+    [Fact]
     public void InstallationFailureCanIdentifyExistingFileConflict()
     {
         var result = ImeInstallationResult.Failure(

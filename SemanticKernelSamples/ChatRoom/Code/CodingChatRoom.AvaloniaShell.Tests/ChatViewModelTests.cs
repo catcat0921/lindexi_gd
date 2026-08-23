@@ -151,6 +151,31 @@ public sealed class ChatViewModelTests
         Assert.HasCount(currentMessageCount, viewModel.Messages);
     }
 
+    [TestMethod(DisplayName = "切换模型应仅更新当前终结点管理器的首选模型")]
+    [Timeout(5000)]
+    public void SelectingModelShouldUpdateInMemoryPrimaryModel()
+    {
+        var manager = new CopilotChatManager();
+        var firstModel = new FakeLanguageModel(new FakeChatClient())
+        {
+            ModelDefinition = new ModelDefinition { Provider = "fake", ModelId = "first", ModelName = "First" },
+        };
+        var secondModel = new FakeLanguageModel(new FakeChatClient())
+        {
+            ModelDefinition = new ModelDefinition { Provider = "fake", ModelId = "second", ModelName = "Second" },
+        };
+        manager.AgentApiEndpointManager.RegisterLanguageModelProvider(
+            new FakeLanguageModelProvider([firstModel, secondModel]));
+        manager.AgentApiEndpointManager.PrimaryModel = firstModel;
+        var application = new CodingChatApplication(manager, new EmptySessionStore());
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：fake/First");
+
+        viewModel.SelectedModel = viewModel.AvailableModels[1];
+
+        Assert.AreSame(secondModel, manager.AgentApiEndpointManager.PrimaryModel);
+        Assert.AreEqual("当前模型：fake/Second", viewModel.StatusText);
+    }
+
     [TestMethod(DisplayName = "审批入口应复用聊天管理器完成决策")]
     [Timeout(5000)]
     public void ApprovalActionsShouldDelegateToChatManager()
@@ -186,6 +211,102 @@ public sealed class ChatViewModelTests
 
         Assert.AreEqual(string.Empty, viewModel.InputText);
         Assert.AreEqual(1, runner.RunCount);
+    }
+
+    [TestMethod(DisplayName = "运行期间插话应显示提交反馈并保持发送入口可用")]
+    [Timeout(5000)]
+    public async Task InterruptionShouldShowSubmissionFeedbackAndKeepSendAvailable()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new CancelableRunner(manager);
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        await application.InitializeAsync();
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
+        {
+            InputText = "开始长任务",
+        };
+        viewModel.SendCommand.Execute(null);
+        await runner.Started.Task;
+        viewModel.InputText = "改为优先修复测试";
+
+        Assert.AreEqual("插话", viewModel.SendButtonText);
+        Assert.IsTrue(viewModel.SendCommand.CanExecute(null));
+        viewModel.SendCommand.Execute(null);
+        await runner.Injected.Task;
+        await WaitUntilAsync(() => viewModel.StatusText == "插话已提交，等待 Agent 处理");
+
+        Assert.AreEqual(string.Empty, viewModel.InputText);
+        Assert.AreEqual("改为优先修复测试", runner.InjectedText);
+        viewModel.StopCommand.Execute(null);
+        await runner.Canceled.Task;
+    }
+
+    [TestMethod(DisplayName = "循环迭代运行期间插话不应启动独立循环")]
+    [Timeout(5000)]
+    public async Task InterruptionDuringLoopIterationShouldUseActiveRun()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new CancelableRunner(manager);
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        await application.InitializeAsync();
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
+        {
+            InputText = "开始循环任务",
+            IsLoopIterationEnabled = true,
+        };
+        viewModel.SendCommand.Execute(null);
+        await runner.Started.Task;
+        viewModel.InputText = "只处理这条插话";
+
+        viewModel.SendCommand.Execute(null);
+        await runner.Injected.Task;
+        await WaitUntilAsync(() => viewModel.StatusText == "插话已提交，等待 Agent 处理");
+
+        Assert.AreEqual("只处理这条插话", runner.InjectedText);
+        viewModel.IsLoopIterationEnabled = false;
+        viewModel.StopCommand.Execute(null);
+        await runner.Canceled.Task;
+    }
+
+    [TestMethod(DisplayName = "循环迭代取消勾选应等待当前轮完成后退出")]
+    [Timeout(5000)]
+    public async Task LoopIterationShouldFinishCurrentRunWhenOptionIsCleared()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new CompletingRunner(manager);
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        await application.InitializeAsync();
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
+        {
+            InputText = "继续处理交接文档",
+            IsLoopIterationEnabled = true,
+        };
+
+        viewModel.SendCommand.Execute(null);
+        await runner.Started.Task;
+
+        Assert.IsTrue(viewModel.IsLoopIterationEnabled);
+        viewModel.IsLoopIterationEnabled = false;
+        Assert.IsFalse(runner.CancellationToken.IsCancellationRequested);
+        runner.Complete();
+        await WaitUntilAsync(() => !viewModel.IsRunning);
+
+        Assert.AreEqual(1, runner.RunCount);
+        Assert.AreEqual("继续处理交接文档", Assert.IsInstanceOfType<TextContent>(runner.ObservedContents![0]).Text);
+    }
+
+    [TestMethod(DisplayName = "循环迭代模式应要求输入固定文本")]
+    [Timeout(5000)]
+    public void LoopIterationShouldRequireTextPrompt()
+    {
+        var manager = new CopilotChatManager();
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), new ImmediateRunner(manager));
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
+        Assert.IsTrue(viewModel.TryAddImageAttachment("sample.png", new byte[] { 1, 2, 3 }));
+
+        viewModel.IsLoopIterationEnabled = true;
+
+        Assert.IsFalse(viewModel.SendCommand.CanExecute(null));
     }
 
     [TestMethod(DisplayName = "仅附加图片时发送命令应可用并清空附件")]
@@ -474,6 +595,7 @@ public sealed class ChatViewModelTests
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
+            bool enableAutomaticCompression,
             CancellationToken cancellationToken)
         {
             RunCount++;
@@ -491,8 +613,40 @@ public sealed class ChatViewModelTests
         public Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
+            bool enableAutomaticCompression,
             CancellationToken cancellationToken) =>
             Task.FromException<CodingAgentRunResult>(exception);
+    }
+
+    private sealed class CompletingRunner(CopilotChatManager manager) : ICodingChatRunner
+    {
+        private readonly TaskCompletionSource<string?> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int RunCount { get; private set; }
+
+        public CancellationToken CancellationToken { get; private set; }
+
+        public IReadOnlyList<AIContent>? ObservedContents { get; private set; }
+
+        public async Task<CodingAgentRunResult> RunAsync(
+            IReadOnlyList<AIContent> contents,
+            string? workspacePath,
+            bool enableAutomaticCompression,
+            CancellationToken cancellationToken)
+        {
+            RunCount++;
+            CancellationToken = cancellationToken;
+            ObservedContents = contents;
+            await manager.AppendMessageAsync(CopilotChatMessage.CreateUser(contents), cancellationToken);
+            var assistantMessage = CopilotChatMessage.CreateAssistant(CopilotChatMessage.PlaceholderContent, isPresetInfo: false);
+            await manager.SelectedSession.AddMessageAsync(assistantMessage);
+            Started.TrySetResult();
+            return new CodingAgentRunResult(assistantMessage, _completion.Task);
+        }
+
+        public void Complete() => _completion.TrySetResult("完成");
     }
 
     private sealed class CancelableRunner(CopilotChatManager manager) : ICodingChatRunner
@@ -501,19 +655,37 @@ public sealed class ChatViewModelTests
 
         public TaskCompletionSource Canceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public TaskCompletionSource Injected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public CancellationToken CancellationToken { get; private set; }
+
+        public IReadOnlyList<AIContent>? ObservedContents { get; private set; }
+
+        public string? InjectedText { get; private set; }
 
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
+            bool enableAutomaticCompression,
             CancellationToken cancellationToken)
         {
             CancellationToken = cancellationToken;
+            ObservedContents = contents;
             await manager.AppendMessageAsync(CopilotChatMessage.CreateUser(contents), cancellationToken);
             var assistantMessage = CopilotChatMessage.CreateAssistant(CopilotChatMessage.PlaceholderContent, isPresetInfo: false);
             await manager.SelectedSession.AddMessageAsync(assistantMessage);
             Started.TrySetResult();
             return new CodingAgentRunResult(assistantMessage, WaitForCancellationAsync(cancellationToken));
+        }
+
+        public Task InjectMessageAsync(
+            IReadOnlyList<AIContent> contents,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            InjectedText = Assert.IsInstanceOfType<TextContent>(contents[0]).Text;
+            Injected.TrySetResult();
+            return Task.CompletedTask;
         }
 
         private async Task<string?> WaitForCancellationAsync(CancellationToken cancellationToken)

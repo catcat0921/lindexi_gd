@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace AgentLib;
+namespace AgentLib.Reducers;
 
 /// <summary>
 /// 装饰器模式的 <see cref="IChatReducer"/> 包装器，在工具调用尚未完成时跳过压缩。
@@ -18,7 +18,7 @@ namespace AgentLib;
 /// 等待工具执行完成后再由框架再次触发压缩。
 /// </para>
 /// </summary>
-internal sealed class ToolCallAwareChatReducer : IChatReducer
+public sealed class ToolCallAwareChatReducer : IChatReducer
 {
     private readonly IChatReducer _innerReducer;
 

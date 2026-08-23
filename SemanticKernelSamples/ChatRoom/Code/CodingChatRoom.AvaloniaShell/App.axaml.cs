@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -46,8 +45,10 @@ public partial class App : Application
                     _runtime.ChatManager,
                     _runtime.Application,
                     _runtime.WorkspaceController,
-                    $"当前模型：{_runtime.ModelDisplayName}"));
-            var mainWindow = new MainWindow
+                    $"当前模型：{_runtime.ModelDisplayName}"),
+                new CodingChatSettingsService(paths));
+            var mainWindow = new MainWindow(
+                new CodingChatHistoryLoader(_runtime.Application))
             {
                 DataContext = mainViewModel,
             };

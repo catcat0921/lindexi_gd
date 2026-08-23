@@ -22,6 +22,7 @@ internal sealed class CodingChatApplication
     private readonly ICodingChatRunner? _chatRunner;
     private readonly CodingWorkspaceController? _workspaceController;
     private CancellationTokenSource? _activeRunCancellationTokenSource;
+    private volatile bool _isLoopIterationEnabled;
     private bool _isCompressionActive;
     private bool _isRunActive;
 
@@ -31,6 +32,7 @@ internal sealed class CodingChatApplication
         ArgumentNullException.ThrowIfNull(sessionStore);
         _chatManager = chatManager;
         _sessionStore = sessionStore;
+        AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
     }
 
     public CodingChatApplication(
@@ -62,54 +64,38 @@ internal sealed class CodingChatApplication
 
     public bool CanChangeSession => !HasActiveOperation;
 
-    public bool CanSend => _chatRunner is not null && !HasActiveOperation;
+    public bool CanSend => _chatRunner is not null && !_isCompressionActive;
 
     public bool CanCompressConversation => !HasActiveOperation
         && _chatManager.SelectedSession.AgentSession is not null;
 
     public bool IsCompressionActive => _isCompressionActive;
 
+    public bool IsLoopIterationEnabled
+    {
+        get => _isLoopIterationEnabled;
+        set => _isLoopIterationEnabled = value;
+    }
+
     public bool IsRunActive => _isRunActive;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<CopilotChatSessionSummary> summaries = await _sessionStore
-            .ListSessionsAsync(cancellationToken);
-        Sessions.Clear();
+        IReadOnlyList<CopilotChatSessionSummary> summaries = await LoadSessionSummariesAsync(cancellationToken);
+        AddSessionSummaries(summaries);
+    }
+
+    internal Task<IReadOnlyList<CopilotChatSessionSummary>> LoadSessionSummariesAsync(
+        CancellationToken cancellationToken = default)
+        => _sessionStore.ListSessionsAsync(cancellationToken);
+
+    internal void AddSessionSummaries(IReadOnlyList<CopilotChatSessionSummary> summaries)
+    {
+        ArgumentNullException.ThrowIfNull(summaries);
         foreach (CopilotChatSessionSummary summary in summaries)
         {
             Sessions.Add(summary);
         }
-
-        if (summaries.Count == 0)
-        {
-            AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
-            OnStateChanged();
-            return;
-        }
-
-        CopilotChatSession initialSession = _chatManager.SelectedSession;
-        foreach (CopilotChatSessionSummary summary in summaries)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                CopilotChatSession restoredSession = await _sessionStore
-                    .LoadSessionAsync(summary.SessionId, cancellationToken);
-                _chatManager.AddSession(restoredSession, select: true);
-                if (!ReferenceEquals(initialSession, restoredSession))
-                {
-                    _chatManager.RemoveSession(initialSession);
-                }
-
-                break;
-            }
-            catch (Exception) when (!cancellationToken.IsCancellationRequested)
-            {
-            }
-        }
-
-        OnStateChanged();
     }
 
     public Task CreateNewSessionAsync(CancellationToken cancellationToken = default)
@@ -179,18 +165,22 @@ internal sealed class CodingChatApplication
         OnStateChanged();
     }
 
-    public async Task SendMessageAsync(string prompt, CancellationToken cancellationToken = default)
+    public async Task SendMessageAsync(
+        string prompt,
+        bool enableAutomaticCompression = true,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(prompt))
         {
             throw new ArgumentException("消息内容不能为空。", nameof(prompt));
         }
 
-        await SendMessageAsync([new TextContent(prompt)], cancellationToken);
+        await SendMessageAsync([new TextContent(prompt)], enableAutomaticCompression, cancellationToken);
     }
 
     public async Task SendMessageAsync(
         IReadOnlyList<AIContent> contents,
+        bool enableAutomaticCompression = true,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(contents);
@@ -202,9 +192,15 @@ internal sealed class CodingChatApplication
 
         ICodingChatRunner chatRunner = _chatRunner
             ?? throw new InvalidOperationException("编程代理运行器尚未初始化。");
-        if (HasActiveOperation)
+        if (_isCompressionActive)
         {
-            throw new InvalidOperationException("已有活动操作正在运行。");
+            throw new InvalidOperationException("对话压缩期间不能发送消息。");
+        }
+
+        if (_isRunActive)
+        {
+            await chatRunner.InjectMessageAsync(runContents, cancellationToken);
+            return;
         }
 
         CancellationTokenSource runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -216,8 +212,18 @@ internal sealed class CodingChatApplication
         try
         {
             CodingAgentRunResult runResult = await chatRunner
-                .RunAsync(runContents, _workspaceController?.CommittedWorkspacePath, runCancellationTokenSource.Token);
+                .RunAsync(
+                    runContents,
+                    _workspaceController?.CommittedWorkspacePath,
+                    enableAutomaticCompression,
+                    runCancellationTokenSource.Token);
             await runResult.CompletionTask;
+            if (ReferenceEquals(_activeRunCancellationTokenSource, runCancellationTokenSource))
+            {
+                _activeRunCancellationTokenSource = null;
+                _isRunActive = false;
+                OnStateChanged();
+            }
         }
         catch (Exception exception)
         {
@@ -245,6 +251,43 @@ internal sealed class CodingChatApplication
 
                 runCancellationTokenSource.Dispose();
                 OnStateChanged();
+            }
+        }
+    }
+
+    public async Task RunLoopIterationAsync(string prompt, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            throw new ArgumentException("消息内容不能为空。", nameof(prompt));
+        }
+
+        while (IsLoopIterationEnabled)
+        {
+            try
+            {
+                await SendMessageAsync(prompt, enableAutomaticCompression: true, cancellationToken);
+                await CompressConversationAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                if (!IsLoopIterationEnabled)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
         }
     }

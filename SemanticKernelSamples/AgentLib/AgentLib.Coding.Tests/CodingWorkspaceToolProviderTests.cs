@@ -1,4 +1,6 @@
 using AgentLib.Coding;
+using AgentLib.Model;
+using AgentLib.Tools;
 
 using Microsoft.Extensions.AI;
 
@@ -10,40 +12,6 @@ namespace AgentLib.Coding.Tests;
 [TestClass]
 public sealed class CodingWorkspaceToolProviderTests
 {
-    [TestMethod(DisplayName = "Language Server 启动失败时仍应发布完整工作区工具")]
-    [Timeout(15000)]
-    public async Task SetWorkspacePathAsync_WhenLanguageServerCannotStart_PublishesAllTools()
-    {
-        string workspacePath = CreateTestDirectory();
-        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
-        await using var roleTool = new CodingWorkspaceToolProvider(invalidLanguageServerPath);
-
-        await roleTool.SetWorkspacePathAsync(workspacePath, CancellationToken.None);
-        await using CodingWorkspaceToolLease lease = await roleTool.AcquireLeaseAsync();
-
-        CollectionAssert.AreEquivalent(
-            new[]
-            {
-                "get_projects_in_solution",
-                "get_files_in_project",
-                "code_search",
-                "find_symbol",
-                "find_all_references",
-                "ListDirectory",
-                "FindEntriesByName",
-                "FindFilesMatchingPattern",
-                "ReadFileLines",
-                "WriteFileContent",
-                "ReplaceStringInFile",
-                "MultiReplaceStringInFile",
-                "run_build",
-                "run_tests",
-                "read_last_log_lines",
-                "search_last_log",
-            },
-            lease.Tools.Select(tool => tool.Name).ToArray());
-    }
-
     [TestMethod(DisplayName = "Language Server 启动失败时符号工具应返回错误信息")]
     [Timeout(15000)]
     public async Task CodeSearchAsync_WhenLanguageServerCannotStart_ReturnsErrorMessage()
@@ -118,6 +86,39 @@ public sealed class CodingWorkspaceToolProviderTests
         });
 
         StringAssert.Contains(result?.ToString(), "outside.txt");
+    }
+
+    [TestMethod(DisplayName = "Coding 工作区应发布 .NET API 概览和详情工具")]
+    [Timeout(15000)]
+    public async Task SetWorkspacePathAsync_WhenWorkspaceExists_PublishesDotNetApiTools()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using var toolProvider = new CodingWorkspaceToolProvider(invalidLanguageServerPath);
+
+        await toolProvider.SetWorkspacePathAsync(workspacePath, CancellationToken.None);
+        string[] toolNames = await GetCurrentToolNamesAsync(toolProvider);
+
+        CollectionAssert.Contains(toolNames, "ListDotNetApi");
+        CollectionAssert.Contains(toolNames, "GetDotNetTypeApi");
+    }
+
+    [TestMethod(DisplayName = "附加工具源应使用规范化工作区路径创建并发布工具")]
+    [Timeout(15000)]
+    public async Task SetWorkspacePathAsync_WhenAdditionalToolSourceExists_AddsWorkspaceBoundTools()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        var toolSource = new TrackingToolSource();
+        await using var toolProvider = new CodingWorkspaceToolProvider(
+            invalidLanguageServerPath,
+            [toolSource]);
+
+        await toolProvider.SetWorkspacePathAsync(workspacePath, CancellationToken.None);
+        string[] toolNames = await GetCurrentToolNamesAsync(toolProvider);
+
+        Assert.AreEqual(Path.GetFullPath(workspacePath), toolSource.WorkspacePath);
+        CollectionAssert.Contains(toolNames, "host_workspace_tool");
     }
 
     [TestMethod(DisplayName = "清空工作区时应移除已发布工具")]
@@ -274,7 +275,7 @@ public sealed class CodingWorkspaceToolProviderTests
     [Timeout(5000)]
     public async Task SessionShouldFreezeToolsAtCreationTime()
     {
-        var tools = new List<AITool> { CreateTool("original") };
+        var tools = new List<ToolRegistration> { CreateTool("original") };
         await using var provider = CreateProvider(
             (path, _, _) => Task.FromResult(new CodingWorkspaceToolSession(path, tools)));
         await provider.SetWorkspacePathAsync("workspace", CancellationToken.None);
@@ -539,7 +540,8 @@ public sealed class CodingWorkspaceToolProviderTests
         await transaction.DisposeAsync();
     }
 
-    private static AITool CreateTool(string name) => AIFunctionFactory.Create(() => name, name);
+    private static ToolRegistration CreateTool(string name) =>
+        new(AIFunctionFactory.Create(() => name, name));
 
     private static CodingWorkspaceToolProvider CreateProvider(
         Func<string, string, CancellationToken, Task<CodingWorkspaceToolSession>> createSession) =>
@@ -549,6 +551,17 @@ public sealed class CodingWorkspaceToolProviderTests
     {
         await using CodingWorkspaceToolLease lease = await provider.AcquireLeaseAsync();
         return lease.Tools.Select(tool => tool.Name).ToArray();
+    }
+
+    private sealed class TrackingToolSource : ICodingWorkspaceToolSource
+    {
+        public string? WorkspacePath { get; private set; }
+
+        public IReadOnlyList<AITool> CreateTools(string workspacePath)
+        {
+            WorkspacePath = workspacePath;
+            return [CreateTool("host_workspace_tool").Tool];
+        }
     }
 
     private sealed class TestSessionProvider(

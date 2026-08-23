@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -12,6 +13,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 
+using CodingChatRoom.AvaloniaShell.Services;
 using CodingChatRoom.AvaloniaShell.ViewModels;
 
 namespace CodingChatRoom.AvaloniaShell.Views;
@@ -36,6 +38,7 @@ public partial class ChatView : UserControl
     public ChatView()
     {
         InitializeComponent();
+        MessageInputTextBox.AddHandler(KeyDownEvent, MessageInputTextBox_OnKeyDown, RoutingStrategies.Tunnel);
         MessagesScrollViewer.ScrollChanged += OnMessagesScrollChanged;
         DataContextChanged += OnDataContextChanged;
     }
@@ -109,6 +112,26 @@ public partial class ChatView : UserControl
         }
     }
 
+    private void ImageButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { CommandParameter: CopilotChatImageItem imageItem })
+        {
+            return;
+        }
+
+        try
+        {
+            TemporaryImageViewer.Open(imageItem);
+        }
+        catch (Exception exception) when (exception is IOException
+                                          or UnauthorizedAccessException
+                                          or InvalidOperationException
+                                          or System.ComponentModel.Win32Exception)
+        {
+            Trace.TraceError($"无法使用系统图片查看器打开聊天图片：{exception}");
+        }
+    }
+
     private void ApproveToolButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { CommandParameter: CopilotChatApprovalToolItem approvalToolItem }
@@ -175,8 +198,19 @@ public partial class ChatView : UserControl
         }
     }
 
-    private void MessageInputTextBox_OnKeyDown(object? sender, KeyEventArgs e)
+    private async void MessageInputTextBox_OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.V && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            e.Handled = true;
+            if (!await TryPasteClipboardImageAsync() && sender is TextBox textBox)
+            {
+                textBox.Paste();
+            }
+
+            return;
+        }
+
         if (e.Key != Key.Enter
             || !e.KeyModifiers.HasFlag(KeyModifiers.Control)
             || DataContext is not ChatViewModel viewModel
@@ -187,6 +221,69 @@ public partial class ChatView : UserControl
 
         e.Handled = true;
         viewModel.SendCommand.Execute(null);
+    }
+
+    private async Task<bool> TryPasteClipboardImageAsync()
+    {
+        if (DataContext is not ChatViewModel viewModel
+            || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return false;
+        }
+
+        IAsyncDataTransfer? dataTransfer = await clipboard.TryGetDataAsync();
+        if (dataTransfer is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            object? clipboardData = await dataTransfer.TryGetValueAsync(DataFormat.Bitmap);
+            byte[]? imageData = await GetClipboardImageBytesAsync(clipboardData);
+            if (imageData is null)
+            {
+                return false;
+            }
+
+            using var validationStream = new MemoryStream(imageData, writable: false);
+            using var bitmap = new Bitmap(validationStream);
+            return viewModel.TryAddImageAttachment($"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.png", imageData);
+        }
+        catch (Exception exception) when (exception is IOException
+                                          or InvalidOperationException
+                                          or ArgumentException)
+        {
+            await viewModel.AddSystemNoticeAsync($"无法粘贴剪贴板图片：{exception.Message}");
+            return true;
+        }
+    }
+
+    private static async Task<byte[]?> GetClipboardImageBytesAsync(object? clipboardData)
+    {
+        switch (clipboardData)
+        {
+            case byte[] bytes:
+                return bytes;
+            case MemoryStream memoryStream:
+                return memoryStream.ToArray();
+            case Stream stream:
+                using (var buffer = new MemoryStream())
+                {
+                    await stream.CopyToAsync(buffer);
+                    return buffer.ToArray();
+                }
+            case Bitmap bitmap:
+                using (var buffer = new MemoryStream())
+                {
+#pragma warning disable CS0618
+                    bitmap.Save(buffer);
+#pragma warning restore CS0618
+                    return buffer.ToArray();
+                }
+            default:
+                return null;
+        }
     }
 
     private async Task SetClipboardTextAsync(string text)

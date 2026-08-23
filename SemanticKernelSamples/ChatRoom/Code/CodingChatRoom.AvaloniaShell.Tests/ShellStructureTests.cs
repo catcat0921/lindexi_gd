@@ -10,9 +10,9 @@ namespace CodingChatRoom.AvaloniaShell.Tests;
 [TestClass]
 public sealed class ShellStructureTests
 {
-    [TestMethod(DisplayName = "主 ViewModel 只应组合历史会话与聊天区域")]
+    [TestMethod(DisplayName = "主 ViewModel 应组合历史会话、聊天与设置导航")]
     [Timeout(5000)]
-    public void MainViewModelShouldOnlyComposeSessionListAndChat()
+    public void MainViewModelShouldComposeSessionListChatAndSettingsNavigation()
     {
         var viewModel = new MainViewModel();
 
@@ -26,7 +26,16 @@ public sealed class ShellStructureTests
             .ToArray();
 
         CollectionAssert.AreEquivalent(
-            new[] { nameof(MainViewModel.ChatViewModel), nameof(MainViewModel.IsBusy), nameof(MainViewModel.SessionListViewModel) },
+            new[]
+            {
+                nameof(MainViewModel.ChatViewModel),
+                nameof(MainViewModel.IsBusy),
+                nameof(MainViewModel.IsChatOpen),
+                nameof(MainViewModel.IsSettingsOpen),
+                nameof(MainViewModel.OpenSettingsCommand),
+                nameof(MainViewModel.SessionListViewModel),
+                nameof(MainViewModel.SettingsViewModel),
+            },
             publicPropertyNames);
     }
 
@@ -66,6 +75,48 @@ public sealed class ShellStructureTests
         Assert.IsNotNull(buttonField);
     }
 
+    [TestMethod(DisplayName = "聊天视图应包含循环迭代勾选框")]
+    [Timeout(5000)]
+    public void ChatViewShouldContainLoopIterationCheckBox()
+    {
+        FieldInfo? checkBoxField = typeof(ChatView).GetField(
+            "LoopIterationCheckBox",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.IsNotNull(checkBoxField);
+    }
+
+    [TestMethod(DisplayName = "聊天视图应包含模型选择下拉框")]
+    [Timeout(5000)]
+    public void ChatViewShouldContainModelSelector()
+    {
+        FieldInfo? comboBoxField = typeof(ChatView).GetField(
+            "ModelSelector",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.IsNotNull(comboBoxField);
+    }
+
+    [TestMethod(DisplayName = "聊天视图应包含自动压缩勾选框")]
+    [Timeout(5000)]
+    public void ChatViewShouldContainAutomaticCompressionCheckBox()
+    {
+        FieldInfo? checkBoxField = typeof(ChatView).GetField(
+            "AutomaticCompressionCheckBox",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.IsNotNull(checkBoxField);
+    }
+
+    [TestMethod(DisplayName = "聊天视图模型默认应启用自动压缩")]
+    [Timeout(5000)]
+    public void ChatViewModelShouldEnableAutomaticCompressionByDefault()
+    {
+        var viewModel = new ChatViewModel();
+
+        Assert.IsTrue(viewModel.IsAutomaticCompressionEnabled);
+    }
+
     [TestMethod(DisplayName = "窗口标题应显示已提交的工作路径")]
     [Timeout(5000)]
     public void WorkspaceTitleShouldIncludeCommittedWorkspacePath()
@@ -73,12 +124,12 @@ public sealed class ShellStructureTests
         var converter = new WorkspaceTitleConverter();
 
         object title = converter.Convert(
-            @"C:\Code\Demo",
+            [@"C:\Code\Demo", "修复窗口标题"],
             typeof(string),
             "CodingChatRoom 编程助手",
             CultureInfo.InvariantCulture);
 
-        Assert.AreEqual(@"CodingChatRoom 编程助手 - C:\Code\Demo", title);
+        Assert.AreEqual(@"CodingChatRoom 编程助手 - C:\Code\Demo - 修复窗口标题", title);
     }
 
     [TestMethod(DisplayName = "未提交工作路径时窗口标题应只显示应用名称")]
@@ -88,7 +139,7 @@ public sealed class ShellStructureTests
         var converter = new WorkspaceTitleConverter();
 
         object title = converter.Convert(
-            null,
+            [null, null],
             typeof(string),
             "CodingChatRoom 编程助手",
             CultureInfo.InvariantCulture);

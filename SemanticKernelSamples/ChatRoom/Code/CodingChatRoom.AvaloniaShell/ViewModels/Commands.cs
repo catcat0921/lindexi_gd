@@ -38,18 +38,17 @@ public sealed class SimpleCommand : ICommand
 }
 
 /// <summary>
-/// 提供防止重复执行的异步命令实现。
+/// 提供带参数的同步命令实现。
 /// </summary>
-public sealed class SimpleAsyncCommand : ICommand
+public sealed class SimpleCommand<T> : ICommand
 {
-    private readonly Func<Task> _execute;
-    private readonly Func<bool>? _canExecute;
-    private bool _isExecuting;
+    private readonly Action<T?> _execute;
+    private readonly Func<T?, bool>? _canExecute;
 
     /// <summary>
-    /// 使用指定异步执行委托创建命令。
+    /// 使用指定执行委托创建命令。
     /// </summary>
-    public SimpleAsyncCommand(Func<Task> execute, Func<bool>? canExecute = null)
+    public SimpleCommand(Action<T?> execute, Func<T?, bool>? canExecute = null)
     {
         ArgumentNullException.ThrowIfNull(execute);
         _execute = execute;
@@ -60,7 +59,54 @@ public sealed class SimpleAsyncCommand : ICommand
     public event EventHandler? CanExecuteChanged;
 
     /// <inheritdoc />
-    public bool CanExecute(object? parameter) => !_isExecuting && (_canExecute?.Invoke() ?? true);
+    public bool CanExecute(object? parameter)
+        => parameter is T or null && (_canExecute?.Invoke((T?) parameter) ?? true);
+
+    /// <inheritdoc />
+    public void Execute(object? parameter)
+    {
+        if (CanExecute(parameter))
+        {
+            _execute((T?) parameter);
+        }
+    }
+
+    /// <summary>
+    /// 通知绑定目标重新计算命令状态。
+    /// </summary>
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+
+/// <summary>
+/// 提供防止重复执行的异步命令实现。
+/// </summary>
+public sealed class SimpleAsyncCommand : ICommand
+{
+    private readonly Func<Task> _execute;
+    private readonly Func<bool>? _canExecute;
+    private readonly bool _allowConcurrentExecutions;
+    private bool _isExecuting;
+
+    /// <summary>
+    /// 使用指定异步执行委托创建命令。
+    /// </summary>
+    public SimpleAsyncCommand(
+        Func<Task> execute,
+        Func<bool>? canExecute = null,
+        bool allowConcurrentExecutions = false)
+    {
+        ArgumentNullException.ThrowIfNull(execute);
+        _execute = execute;
+        _canExecute = canExecute;
+        _allowConcurrentExecutions = allowConcurrentExecutions;
+    }
+
+    /// <inheritdoc />
+    public event EventHandler? CanExecuteChanged;
+
+    /// <inheritdoc />
+    public bool CanExecute(object? parameter)
+        => (_allowConcurrentExecutions || !_isExecuting) && (_canExecute?.Invoke() ?? true);
 
     /// <inheritdoc />
     public async void Execute(object? parameter)

@@ -49,7 +49,7 @@ internal static class IntegrationTestRunner
         var installed = false;
         try
         {
-            var uninstall = installer.UninstallExisting("XiaoXi IME", WindowsImeInstaller.InstalledImeFileName);
+            var uninstall = installer.UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");
             results.Add(new IntegrationStageResult(
                 "uninstall-old",
                 uninstall.Succeeded,
@@ -63,20 +63,22 @@ internal static class IntegrationTestRunner
                     PendingDeletePaths = uninstall.PendingDeletePaths ?? [],
                     RetiredFilePaths = uninstall.RetiredFilePaths ?? [],
                 }));
-            LogResult(log, results[^1], options.Verbose);
+            LogResult(log, results[^1]);
             if (!uninstall.Succeeded)
             {
-                return await CompleteAsync(12, reportPath, results, log, installer, installed, options.KeepInstalled, options.Verbose);
+                return await CompleteAsync(12, reportPath, results, log, installer, installed, keepInstalled: false);
             }
 
-            if (!manifest.NativeComponents.TryGetValue("x64", out var x64Components))
+            if (!manifest.NativeComponents.TryGetValue("x64", out var x64Components)
+                || !manifest.NativeComponents.TryGetValue("x86", out var x86Components))
             {
-                results.Add(new IntegrationStageResult("install", false, 1, "The payload does not contain x64 native components.", "", ""));
-                LogResult(log, results[^1], options.Verbose);
-                return await CompleteAsync(13, reportPath, results, log, installer, installed, options.KeepInstalled, options.Verbose);
+                results.Add(new IntegrationStageResult("install", false, 1, "The payload does not contain both x64 and x86 native components.", "", ""));
+                LogResult(log, results[^1]);
+                return await CompleteAsync(13, reportPath, results, log, installer, installed, keepInstalled: false);
             }
 
             var imePath = Resolve(root, x64Components.ImeFile);
+            var x86ImePath = Resolve(root, x86Components.ImeFile);
             var preInstallDiagnostics = ImeInstallationDiagnostics.Collect(imePath);
             results.Add(new IntegrationStageResult(
                 "diagnostics-pre-install",
@@ -88,15 +90,15 @@ internal static class IntegrationTestRunner
                 "",
                 "",
                 preInstallDiagnostics));
-            LogResult(log, results[^1], options.Verbose);
+            LogResult(log, results[^1]);
 
             var nativeLoadProbe = await RunNativeImeLoadProbeAsync(imePath);
             results.Add(nativeLoadProbe);
-            LogResult(log, results[^1], options.Verbose);
+            LogResult(log, results[^1]);
 
-            var install = installer.Install(imePath, "XiaoXi IME");
+            var install = installer.InstallPair(imePath, x86ImePath, "XiaoXi IME");
             installed = install.Succeeded;
-            var installMessage = $"{install.Message} This stage registers the x64 IME only; x86 registration remains a separate VM validation requirement.";
+            var installMessage = install.Message;
             results.Add(new IntegrationStageResult(
                 "install-x64",
                 install.Succeeded,
@@ -115,7 +117,7 @@ internal static class IntegrationTestRunner
                     install.RollbackError,
                     install.FailureKind,
                 }));
-            LogResult(log, results[^1], options.Verbose);
+            LogResult(log, results[^1]);
             if (!install.Succeeded)
             {
                 var postFailureDiagnostics = ImeInstallationDiagnostics.Collect(imePath);
@@ -127,7 +129,7 @@ internal static class IntegrationTestRunner
                     "",
                     "",
                     postFailureDiagnostics));
-                LogResult(log, results[^1], options.Verbose);
+                LogResult(log, results[^1]);
 
                 if (install.FailureKind == ImeInstallationFailureKind.ImmInstallImeFailure)
                 {
@@ -143,16 +145,19 @@ internal static class IntegrationTestRunner
                         "",
                         "",
                         variantResults));
-                    LogResult(log, results[^1], options.Verbose);
+                    LogResult(log, results[^1]);
                 }
-                return await CompleteAsync(13, reportPath, results, log, installer, installed, options.KeepInstalled, options.Verbose);
+                return await CompleteAsync(13, reportPath, results, log, installer, installed, keepInstalled: false);
             }
 
             var commands = new List<SystemTestCommand>();
-            foreach (var (architecture, components) in manifest.NativeComponents.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            if (!options.SkipTsf)
             {
-                commands.Add(new SystemTestCommand($"tsf-abi-{architecture}", Resolve(root, components.TsfAbiHostExecutable), ["abi", Resolve(root, components.TsfModule)]));
-                commands.Add(new SystemTestCommand($"tsf-com-activation-{architecture}", Resolve(root, components.TsfAbiHostExecutable), ["com-activation", Resolve(root, components.TsfModule)]));
+                foreach (var (architecture, components) in manifest.NativeComponents.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    commands.Add(new SystemTestCommand($"tsf-abi-{architecture}", Resolve(root, components.TsfAbiHostExecutable), ["abi", Resolve(root, components.TsfModule)]));
+                    commands.Add(new SystemTestCommand($"tsf-com-activation-{architecture}", Resolve(root, components.TsfAbiHostExecutable), ["com-activation", Resolve(root, components.TsfModule)]));
+                }
             }
             foreach (var executable in manifest.TestHostExecutables)
             {
@@ -161,31 +166,22 @@ internal static class IntegrationTestRunner
 
             foreach (var command in commands)
             {
-                if (string.Equals(command.Id, "integration-tests", StringComparison.Ordinal))
-                {
-                    log.Information(
-                        "integration-tests-action",
-                        "交互式输入测试即将打开窗口。请在输入框中键入 xx；按 Esc 或关闭窗口可立即中止并输出诊断。",
-                        new { command.FileName });
-                }
-
-                var streamChildOutput = options.Verbose || string.Equals(command.Id, "integration-tests", StringComparison.Ordinal);
-                var result = await RunCommandAsync(command, output, error, streamChildOutput);
+                var result = await RunCommandAsync(command);
                 results.Add(result);
-                LogResult(log, result, options.Verbose);
+                LogResult(log, result);
                 if (!result.Succeeded)
                 {
-                    return await CompleteAsync(14, reportPath, results, log, installer, installed, options.KeepInstalled, options.Verbose);
+                    return await CompleteAsync(14, reportPath, results, log, installer, installed, keepInstalled: false);
                 }
             }
 
-            return await CompleteAsync(0, reportPath, results, log, installer, installed, options.KeepInstalled, options.Verbose);
+            return await CompleteAsync(0, reportPath, results, log, installer, installed, keepInstalled: false);
         }
         catch
         {
-            if (installed && !options.KeepInstalled)
+            if (installed)
             {
-                installer.UninstallExisting("XiaoXi IME", WindowsImeInstaller.InstalledImeFileName);
+                installer.UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");
             }
             throw;
         }
@@ -218,7 +214,7 @@ internal static class IntegrationTestRunner
         return null;
     }
 
-    private static string? VerifyPayload(string root, IntegrationPayloadManifest manifest)
+    internal static string? VerifyPayload(string root, IntegrationPayloadManifest manifest)
     {
         if (manifest.SchemaVersion != 3)
         {
@@ -244,11 +240,7 @@ internal static class IntegrationTestRunner
         return null;
     }
 
-    private static async Task<IntegrationStageResult> RunCommandAsync(
-        SystemTestCommand command,
-        TextWriter output,
-        TextWriter error,
-        bool streamOutput)
+    private static async Task<IntegrationStageResult> RunCommandAsync(SystemTestCommand command)
     {
         try
         {
@@ -262,40 +254,15 @@ internal static class IntegrationTestRunner
             {
                 startInfo.ArgumentList.Add(argument);
             }
-
             using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Unable to start {command.FileName}.");
-            using var standardOutput = new StringWriter();
-            using var standardError = new StringWriter();
-            var standardOutputTask = ForwardOutputAsync(process.StandardOutput, output, standardOutput, streamOutput);
-            var standardErrorTask = ForwardOutputAsync(process.StandardError, error, standardError, streamOutput);
-
+            var standardOutput = await process.StandardOutput.ReadToEndAsync();
+            var standardError = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
-            await Task.WhenAll(standardOutputTask, standardErrorTask);
-
-            return new IntegrationStageResult(
-                command.Id,
-                process.ExitCode == 0,
-                process.ExitCode,
-                process.ExitCode == 0 ? "Stage passed." : "Stage failed.",
-                standardOutput.ToString(),
-                standardError.ToString());
+            return new IntegrationStageResult(command.Id, process.ExitCode == 0, process.ExitCode, process.ExitCode == 0 ? "Stage passed." : "Stage failed.", standardOutput, standardError);
         }
         catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             return new IntegrationStageResult(command.Id, false, 1, $"Unable to start stage executable '{command.FileName}'.", "", exception.ToString());
-        }
-    }
-
-    private static async Task ForwardOutputAsync(StreamReader reader, TextWriter destination, TextWriter capture, bool streamOutput)
-    {
-        while (await reader.ReadLineAsync() is { } line)
-        {
-            await capture.WriteLineAsync(line);
-            if (streamOutput)
-            {
-                await destination.WriteLineAsync(line);
-                await destination.FlushAsync();
-            }
         }
     }
 
@@ -355,21 +322,17 @@ internal static class IntegrationTestRunner
             standardError);
     }
 
-    internal static void LogResult(StructuredConsole log, IntegrationStageResult result, bool verbose)
+    private static void LogResult(StructuredConsole log, IntegrationStageResult result)
     {
+        var data = new { result.ExitCode, result.StandardOutput, result.StandardError, result.Data };
         if (result.Succeeded)
         {
-            var data = verbose
-                ? new { result.ExitCode, result.StandardOutput, result.StandardError, result.Data }
-                : null;
             log.Information(result.Id, result.Message, data);
-            return;
         }
-
-        log.Error(
-            result.Id,
-            result.Message,
-            new { result.ExitCode, result.StandardOutput, result.StandardError, result.Data });
+        else
+        {
+            log.Error(result.Id, result.Message, data);
+        }
     }
 
     internal static int GetFinalExitCode(int exitCode, bool cleanupSucceeded)
@@ -382,13 +345,12 @@ internal static class IntegrationTestRunner
         StructuredConsole log,
         IImeInstaller installer,
         bool installed,
-        bool keepInstalled,
-        bool verbose)
+        bool keepInstalled)
     {
         var cleanupSucceeded = true;
         if (installed && !keepInstalled)
         {
-            var cleanup = installer.UninstallExisting("XiaoXi IME", WindowsImeInstaller.InstalledImeFileName);
+            var cleanup = installer.UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");
             cleanupSucceeded = cleanup.Succeeded;
             results.Add(new IntegrationStageResult(
                 "cleanup",
@@ -403,7 +365,7 @@ internal static class IntegrationTestRunner
                     PendingDeletePaths = cleanup.PendingDeletePaths ?? [],
                     RetiredFilePaths = cleanup.RetiredFilePaths ?? [],
                 }));
-            LogResult(log, results[^1], verbose);
+            LogResult(log, results[^1]);
         }
 
         var finalExitCode = GetFinalExitCode(exitCode, cleanupSucceeded);

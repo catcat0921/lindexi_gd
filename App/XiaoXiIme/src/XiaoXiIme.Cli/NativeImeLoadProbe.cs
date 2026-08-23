@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -10,9 +11,10 @@ internal sealed record NativeImeLoadProbeResult(
     int LoadErrorCode,
     string? LoadErrorMessage,
     IReadOnlyDictionary<string, bool> RequiredExports,
-    bool AllRequiredExportsFound);
+    bool AllRequiredExportsFound,
+    bool ImeEnumRegisterWordCallSucceeded);
 
-internal static class NativeImeLoadProbe
+internal static unsafe class NativeImeLoadProbe
 {
     private const uint LoadLibrarySearchDllLoadDir = 0x00000100;
     private const uint LoadLibrarySearchSystem32 = 0x00000800;
@@ -28,6 +30,10 @@ internal static class NativeImeLoadProbe
         "ImeDestroy",
         "ImeEscape",
         "ImeProcessKey",
+        "ImeRegisterWord",
+        "ImeUnregisterWord",
+        "ImeGetRegisterWordStyle",
+        "ImeEnumRegisterWord",
         "ImeSelect",
         "ImeSetActiveContext",
         "ImeSetCompositionString",
@@ -46,7 +52,7 @@ internal static class NativeImeLoadProbe
         var result = Probe(Path.GetFullPath(options.ImeFile));
         output.WriteLine(JsonSerializer.Serialize(result));
         output.Flush();
-        return result.LoadSucceeded && result.AllRequiredExportsFound ? 0 : 1;
+        return result.LoadSucceeded && result.AllRequiredExportsFound && result.ImeEnumRegisterWordCallSucceeded ? 0 : 1;
     }
 
     internal static NativeImeLoadProbeResult Probe(string imePath)
@@ -62,6 +68,7 @@ internal static class NativeImeLoadProbe
                 errorCode,
                 errorCode == 0 ? null : new Win32Exception(errorCode).Message,
                 exports,
+                false,
                 false);
         }
 
@@ -71,7 +78,18 @@ internal static class NativeImeLoadProbe
             {
                 exports[export] = GetProcAddress(module, export) != 0;
             }
-            return new NativeImeLoadProbeResult(imePath, true, 0, null, exports, exports.Values.All(found => found));
+
+            var enumRegisterWordAddress = GetProcAddress(module, "ImeEnumRegisterWord");
+            var enumRegisterWordCallSucceeded = enumRegisterWordAddress != 0
+                && ((delegate* unmanaged[Stdcall]<nint, nint, uint, nint, nint, uint>)enumRegisterWordAddress)(0, 0, 0, 0, 0) == 0;
+            return new NativeImeLoadProbeResult(
+                imePath,
+                true,
+                0,
+                null,
+                exports,
+                exports.Values.All(found => found),
+                enumRegisterWordCallSucceeded);
         }
         finally
         {

@@ -6,12 +6,31 @@ namespace WinRemoteShell.Client;
 
 public static class PushClient
 {
-    public static async Task PushAsync(Uri server, string source, string target, CancellationToken cancellationToken = default)
+    public static Task PushAsync(
+        Uri server,
+        string source,
+        string target,
+        CancellationToken cancellationToken = default) =>
+        PushAsync(server, source, target, PushMode.Merge, cancellationToken);
+
+    public static async Task PushAsync(
+        Uri server,
+        string source,
+        string target,
+        PushMode mode,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(server);
-        if (string.IsNullOrWhiteSpace(source))
+        ArgumentNullException.ThrowIfNull(source);
+        var deleteTarget = source.Length == 0;
+        if (!deleteTarget && string.IsNullOrWhiteSpace(source))
         {
             throw new ArgumentException("The source path is required.", nameof(source));
+        }
+
+        if (deleteTarget && mode != PushMode.Replace)
+        {
+            throw new ArgumentException("An empty source path can only be used with Replace mode.", nameof(mode));
         }
 
         if (string.IsNullOrWhiteSpace(target))
@@ -19,13 +38,19 @@ public static class PushClient
             throw new ArgumentException("The target path is required.", nameof(target));
         }
 
-        using var content = new TransferContent(TransferManifest.Create(source));
         using var client = new HttpClient { BaseAddress = server };
-        using var request = new HttpRequestMessage(HttpMethod.Post, "push")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "push");
+        if (deleteTarget)
         {
-            Content = content
-        };
+            request.Headers.Add("X-WinRS-Delete-Target", "true");
+        }
+        else
+        {
+            request.Content = new TransferContent(TransferManifest.Create(source));
+        }
+
         request.Headers.Add("X-WinRS-Target", Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(target)));
+        request.Headers.Add("X-WinRS-Push-Mode", mode.ToString());
 
         using var response = await client.SendAsync(
             request,

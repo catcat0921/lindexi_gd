@@ -8,11 +8,12 @@
 
 - `system-test-plan [--json]`：输出覆盖传统 IME、TSF、Host、IPC、UI、安装和回滚的全局系统测试计划。
 - `system-test-run <abi-host> <tsf-dll> --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：仅在可还原 VM 中执行隔离 ABI/COM 测试并生成 JSON 报告。
-- `payload-build [--output <directory>]`：在开发机上同时构建 x86/x64 原生组件并收集完整集成测试负载，不修改 Windows 输入法配置。
-- `integration-run [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：仅在可还原 VM 中执行旧版卸载、新版安装、TSF 验证、集成测试和清理；省略负载路径时会从 CLI 所在目录和当前目录逐级向上查找 manifest。
-- `install <ime-file> --allow-system-changes`：显式调用 Windows API 安装输入法；同时要求 `XIAOXIIME_ENVIRONMENT=Test` 或 `VirtualMachine`。
+- `payload-build [--output <directory>] [--no-build]`：在开发机上构建或收集 x86/x64 组件并生成负载，不修改 Windows 输入法配置。
+- `integration-run [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS [--skip-tsf] [--report <file>]`：仅在可还原 VM 中执行完整验证，并始终在结束时清理输入法。
+- `install [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：校验负载，安装 x64/x86 输入法并保留，供人工体验。
+- `uninstall --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：卸载输入法并清理已部署文件。
 
-真实安装和注册涉及管理员权限及系统注册表。执行 `install` 即表示调用方要求安装，CLI 会在基本参数检查通过后调用 `ImmInstallIME`。
+真实安装和注册涉及管理员权限及系统注册表，`install`、`uninstall` 和 `integration-run` 必须在管理员终端及可还原 Windows 环境中执行。
 
 ## 运行命令
 
@@ -42,7 +43,7 @@ dotnet run --project .\src\XiaoXiIme.Cli\XiaoXiIme.Cli.csproj -- --help
 dotnet run --project .\src\XiaoXiIme.Cli\XiaoXiIme.Cli.csproj -- payload-build --output .\artifacts\integration-payload
 ```
 
-该命令依次执行解决方案 Release 构建。传统 IME、TSF InProc DLL 和 TSF ABI Host 分别发布 `win-x86` 与 `win-x64` 两套，因为这些组件必须匹配加载它们的目标进程架构。CLI、ImeHost、IPC 上层应用和集成测试是独立进程或托管逻辑，通过 IPC 通讯，只发布一套 `win-x64` 自包含共享应用负载。
+该命令依次执行解决方案 Release 构建。传统 IME、TSF InProc DLL 和 TSF ABI Host 分别发布 `win-x86` 与 `win-x64` 两套，因为这些组件必须匹配加载它们的目标进程架构。CLI、ImeHost、IPC 上层应用和集成测试是独立进程或托管逻辑，通过 IPC 通讯，只发布一套 `win-x64` 自包含共享应用负载。负载生成与安装、测试相互独立，避免一个命令同时承担多种生命周期。
 
 负载目录结构：
 
@@ -70,24 +71,37 @@ integration-payload/
 
 ## 在 VM 中执行一键集成验证
 
-将整个负载目录复制到已创建快照的 Windows VM。使用管理员 PowerShell 执行：
+将整个负载目录复制到已创建快照的 Windows VM。当前传统 IMM32 主线验收应使用管理员 PowerShell 执行：
 
 ```powershell
-$env:XIAOXIIME_ENVIRONMENT = "VirtualMachine"
-.\app\cli\XiaoXiIme.Cli.exe integration-run . --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS --report .\results\integration.json
+.\app\cli\XiaoXiIme.Cli.exe integration-run . --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS --skip-tsf --report .\results\integration.json
 ```
+
+如果需要单独验证 TSF ABI 和隔离 COM 激活，可以移除 `--skip-tsf`。该模式要求环境已具备对应 COM 注册；否则 COM 激活可能返回 `0x80040154 (REGDB_E_CLASSNOTREG)`，不应将其误判为传统 IMM32 上屏失败。
 
 命令会依次完成：
 
 1. 校验 manifest、文件长度和 SHA-256。
-2. 仅卸载注册表中明确归属于 `XiaoXi IME`、当前 `XIAOXI.IME` 或旧版 `XiaoXiIme.ime` 的布局。
-3. 当前读取 `native\win-x64\ime\XiaoXiIme.ime`，复制为传统 IMM32 兼容的 `System32\XIAOXI.IME` 后注册，并明确报告 x86 注册仍需单独验证。
-4. 分别使用 x86/x64 ABI Host 验证对应架构的 TSF ABI/vtable 和隔离 COM 激活。
-5. 执行负载中的集成测试程序集，覆盖 Host、IPC 和上层逻辑；真实按键场景会弹出测试窗口，需用户在输入框中用键盘输入 `xx`（不要粘贴），流程会等待最多 60 秒。
+2. 仅卸载注册表中明确归属于 `XiaoXi IME` / `XiaoXiIme.ime` 的旧布局。
+3. 将 x64/x86 原生 IME 分别以资源中声明的 `XiaoXiIme.ime` 部署到 `System32`/`SysWOW64`，并使用 x64 系统路径调用 `ImmInstallIME`。
+4. 未传入 `--skip-tsf` 时，分别使用 x86/x64 ABI Host 验证对应架构的 TSF ABI/vtable 和隔离 COM 激活。
+5. 执行负载中的自包含集成测试宿主，覆盖 Host、IPC 和上层逻辑；真实按键场景通过 `SendInput` 自动向测试窗口注入 `xx`，并验证 EDIT 控件精确上屏一次“小希”。
 6. 输出单行 JSON 控制台事件并写入完整 JSON 报告。
-7. 默认卸载测试输入法；传入 `--keep-installed` 才保留安装状态，以便继续人工输入测试。
+7. 卸载测试输入法并清理部署文件。
 
-控制台每一行都是独立 JSON，包含 `timestampUtc`、`level`、`stage`、`message` 和 `data`。默认情况下，成功阶段只输出摘要，非交互子进程的成功文本不会重复打印；失败阶段仍输出完整 stdout、stderr 和诊断数据，完整结果始终写入报告。需要查看所有成功阶段详情时，可添加 `--verbose`。
+如果只需安装后开始人工体验，不运行测试宿主，请执行：
+
+```powershell
+.\app\cli\XiaoXiIme.Cli.exe install . --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS
+```
+
+体验结束后执行：
+
+```powershell
+.\app\cli\XiaoXiIme.Cli.exe uninstall --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS
+```
+
+控制台每一行都是独立 JSON，包含 `timestampUtc`、`level`、`stage`、`message` 和 `data`，便于 LLM 或自动化脚本实时判断当前阶段、退出码、标准输出和错误输出。
 
 安装前会额外输出 `diagnostics-pre-install` 阶段。该阶段完全由 CLI 自身完成，不要求 VM 安装 .NET SDK、Visual Studio、dumpbin 或 Dependencies，内容包括：
 
@@ -95,7 +109,7 @@ $env:XIAOXIIME_ENVIRONMENT = "VirtualMachine"
 - IME 绝对路径、长度、SHA-256、文件属性和 Mark of the Web；
 - PE Machine、Magic、Subsystem、DLL 标志和导入模块；
 - API-set 与普通系统 DLL 的分类和解析结果；
-- `GetBinaryType` 与不执行 DLL 初始化代码的映像映射探测；
+- 不执行 DLL 初始化代码的安全映像映射探测，以及独立进程中的真实加载与导出解析；
 - `System32` 目标文件和匹配键盘布局注册表状态。
 
 如果 `ImmInstallIME` 失败，还会输出 `diagnostics-post-install-failure`，立即记录调用后的文件和注册表状态。排障时应同时保留完整控制台输出和 `results\integration-*.json`；报告中的 `Data` 字段包含未被控制台摘要省略的诊断对象。
