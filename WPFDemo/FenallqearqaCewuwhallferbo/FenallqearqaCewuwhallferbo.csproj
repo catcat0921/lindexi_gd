@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WpfLab.WpfRuntime" Version="1.0.0-alpha.1" />    
+    <PackageReference Include="WpfLab.WpfRuntime" Version="0.0.0-test.20260823083341.sha82f48d" />    
   </ItemGroup>
 </Project>
