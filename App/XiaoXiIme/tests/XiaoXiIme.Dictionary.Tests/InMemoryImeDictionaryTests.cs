@@ -1,4 +1,4 @@
-﻿using XiaoXiIme.Foundation;
+using XiaoXiIme.Foundation;
 
 namespace XiaoXiIme.Dictionary.Tests;
 
@@ -30,6 +30,17 @@ public class InMemoryImeDictionaryTests
 
         Assert.Single(candidates);
         Assert.Equal("你", candidates[0].Text);
+    }
+
+    [Fact]
+    public void Query_WhenPhraseReadingContainsSyllableSpacesThenContinuousInputMatches()
+    {
+        var dictionary = new InMemoryImeDictionary([new ImeCandidate("你好", "ni hao", 100)]);
+
+        var candidates = dictionary.Query("nihao");
+
+        Assert.Single(candidates);
+        Assert.Equal("你好", candidates[0].Text);
     }
 
     [Fact]

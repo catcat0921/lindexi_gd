@@ -15,6 +15,9 @@ return await CommandLine.Parse(args)
     .AddHandler<PayloadBuildOptions>(options => IntegrationPayloadBuilder.BuildAsync(options, Console.Out, Console.Error))
     .AddHandler<IntegrationRunOptions>(options => IntegrationTestRunner.RunAsync(options, Console.Out, Console.Error, static () => new WindowsImeInstaller()))
     .AddHandler<NativeImeLoadProbeOptions>(options => NativeImeLoadProbe.Run(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryUpdateOptions>(options => LocalDictionaryCommands.Update(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryRollbackOptions>(options => LocalDictionaryCommands.Rollback(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryConvertSeWzcOptions>(options => LocalDictionaryCommands.ConvertSeWzc(options, Console.Out, Console.Error))
     .RunAsync();
 
 static int Install(InstallOptions options)

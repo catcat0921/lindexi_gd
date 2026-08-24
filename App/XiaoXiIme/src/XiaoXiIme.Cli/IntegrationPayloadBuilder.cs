@@ -14,24 +14,29 @@ internal static class IntegrationPayloadBuilder
         var stagingDirectory = options.NoBuild
             ? FindPublishDirectory(AppContext.BaseDirectory, Environment.CurrentDirectory)
             : Path.Combine(FindSolutionDirectory(AppContext.BaseDirectory), "artifacts", "integration-publish");
-        var solutionDirectory = options.NoBuild
-            ? stagingDirectory
-            : FindSolutionDirectory(AppContext.BaseDirectory);
-        var outputDirectory = Path.GetFullPath(options.Output ?? Path.Combine(solutionDirectory, "artifacts", "integration-payload"));
+        var solutionDirectory = options.NoBuild ? null : FindSolutionDirectory(AppContext.BaseDirectory);
+        var dictionarySourceDirectory = options.NoBuild
+            ? FindDictionarySourceDirectory(stagingDirectory)
+            : Path.Combine(solutionDirectory!, "data", "dictionaries");
+        var outputDirectory = Path.GetFullPath(options.Output ?? Path.Combine(stagingDirectory, "integration-payload"));
 
         if (!options.NoBuild)
         {
             Directory.CreateDirectory(stagingDirectory);
-            var commands = CreateBuildCommands(solutionDirectory, stagingDirectory);
+            var commands = CreateBuildCommands(solutionDirectory!, stagingDirectory);
             foreach (var command in commands)
             {
-                var exitCode = await RunProcessAsync(command, solutionDirectory, log);
+                var exitCode = await RunProcessAsync(command, solutionDirectory!, log);
                 if (exitCode != 0)
                 {
                     return 10;
                 }
             }
         }
+
+        DefaultDictionaryPackageBuilder.Build(
+            dictionarySourceDirectory,
+            Path.Combine(stagingDirectory, "app", "host"));
 
         var sources = CreateSources(stagingDirectory);
         var missing = sources.Where(source => !File.Exists(source.SourcePath)).Select(source => source.SourcePath).ToArray();
@@ -172,6 +177,10 @@ internal static class IntegrationPayloadBuilder
         {
             File.Copy(file, Path.Combine(targetDirectory, Path.GetFileName(file)), true);
         }
+        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
+        {
+            CopyDirectory(directory, Path.Combine(targetDirectory, Path.GetFileName(directory)));
+        }
     }
 
     private static PayloadFile CreatePayloadFile(string root, string path)
@@ -196,6 +205,32 @@ internal static class IntegrationPayloadBuilder
             }
         }
         throw new DirectoryNotFoundException("Unable to locate the integration publish directory from the CLI or current directory.");
+    }
+
+    private static string FindDictionarySourceDirectory(string stagingDirectory)
+    {
+        var directory = new DirectoryInfo(stagingDirectory);
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "phonetic"))
+                && Directory.Exists(Path.Combine(directory.FullName, "shape"))
+                && Directory.Exists(Path.Combine(directory.FullName, "symbols")))
+            {
+                return directory.FullName;
+            }
+            var repositoryLayout = Path.Combine(directory.FullName, "data", "dictionaries");
+            if (Directory.Exists(repositoryLayout))
+            {
+                return repositoryLayout;
+            }
+            var dataRootLayout = Path.Combine(directory.FullName, "dictionaries");
+            if (Directory.Exists(dataRootLayout))
+            {
+                return dataRootLayout;
+            }
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("Unable to locate the dictionary source directory.");
     }
 
     private static string FindSolutionDirectory(string startDirectory)

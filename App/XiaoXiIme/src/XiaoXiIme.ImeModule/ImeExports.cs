@@ -69,7 +69,10 @@ public static unsafe class ImeExports
 
         try
         {
-            var handled = ImeModuleRuntime.ShouldProcessVirtualKey((ushort)virtualKey, unchecked((uint)keyData), new HImc(inputContext));
+            var handled = ImeModuleRuntime.ShouldProcessVirtualKey(
+                (ushort)virtualKey,
+                GetModifiers(keyState),
+                new HImc(inputContext));
             ImeKeystrokeDiagnostics.RecordImeProcessKey(virtualKey, handled);
             return handled;
         }
@@ -119,7 +122,7 @@ public static unsafe class ImeExports
     {
         try
         {
-            var result = ImeModuleRuntime.ConvertVirtualKey((ushort)virtualKey, scanCode);
+            var result = ImeModuleRuntime.ConvertVirtualKey((ushort)virtualKey, GetModifiers(keyState));
             var compositionWriteSucceeded = s_compositionContextWriter.TryWrite(new HImc(inputContext), result);
             var messages = ImeTransMsgBuilder.BuildMessages(result);
             var written = ImeTransMsgWriter.Write(transKey, messages);
@@ -149,6 +152,15 @@ public static unsafe class ImeExports
     internal static void SetCompositionContextWriterForTesting(ImeCompositionContextWriter? writer)
     {
         s_compositionContextWriter = writer ?? new ImeCompositionContextWriter(ImmContextAccessor.Instance);
+    }
+
+    private static uint GetModifiers(byte* keyState)
+    {
+        const int shiftVirtualKey = 0x10;
+        const byte keyDownMask = 0x80;
+        return keyState is not null && (keyState[shiftVirtualKey] & keyDownMask) != 0
+            ? ImeKeyTranslator.ShiftModifier
+            : 0;
     }
 
     private static void CopyNullTerminated(string value, char* destination, int destinationLength)

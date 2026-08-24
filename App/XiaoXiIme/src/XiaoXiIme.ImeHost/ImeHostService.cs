@@ -7,15 +7,28 @@ namespace XiaoXiIme.ImeHost;
 
 public sealed class ImeHostService : IDisposable
 {
+    private const string DefaultDictionaryPackageDirectoryName = "XiaoXiIme.DictionaryPackage";
+    private const string DefaultUserDictionaryFileName = "user-dictionary.json";
     private readonly Func<ImeContext> _createImeContext;
+    private readonly string? _dictionaryLoadError;
+    private readonly string? _dictionaryPackagePath;
     private readonly Dictionary<ImeSessionId, ImeContext> _imeContexts = [];
     private readonly XiaoXiImeIpcServer _ipcServer;
+    private readonly bool _isUsingFallbackDictionary;
+    private readonly string? _isolatedUserDictionaryPath;
+    private readonly string? _userDictionaryLoadError;
+    private readonly string? _userDictionaryPath;
+    private readonly UserDictionarySaveCoordinator? _userDictionarySaveCoordinator;
     private readonly object _syncRoot = new();
     private bool _started;
     private string? _lastError;
+    private string? _userDictionarySaveError;
 
-    public ImeHostService(XiaoXiImeIpcOptions? options = null)
-        : this(() => new ImeContext(InMemoryImeDictionary.CreateDefault()), options)
+    public ImeHostService(
+        XiaoXiImeIpcOptions? options = null,
+        string? dictionaryPackagePath = null,
+        string? userDictionaryPath = null)
+        : this(LoadRuntimeDictionary(dictionaryPackagePath, userDictionaryPath), options)
     {
     }
 
@@ -25,8 +38,49 @@ public sealed class ImeHostService : IDisposable
     }
 
     internal ImeHostService(Func<ImeContext> createImeContext, XiaoXiImeIpcOptions? options = null)
+        : this(createImeContext, options, dictionaryPackagePath: null, dictionaryLoadError: null, isUsingFallbackDictionary: false)
+    {
+    }
+
+    private ImeHostService(RuntimeDictionary runtimeDictionary, XiaoXiImeIpcOptions? options)
+    {
+        var userDictionary = new UserDictionary(runtimeDictionary.Dictionary, runtimeDictionary.UserDictionaryLoad.Entries);
+        _dictionaryPackagePath = runtimeDictionary.PackagePath;
+        _dictionaryLoadError = runtimeDictionary.LoadError;
+        _isUsingFallbackDictionary = runtimeDictionary.IsFallback;
+        _userDictionaryPath = runtimeDictionary.UserDictionaryPath;
+        _userDictionaryLoadError = runtimeDictionary.UserDictionaryLoad.Error;
+        _isolatedUserDictionaryPath = runtimeDictionary.UserDictionaryLoad.IsolatedCorruptFilePath;
+        _userDictionarySaveCoordinator = new UserDictionarySaveCoordinator(
+            runtimeDictionary.UserDictionaryPath,
+            error =>
+            {
+                lock (_syncRoot)
+                {
+                    _userDictionarySaveError = error;
+                }
+            });
+        _createImeContext = () => new ImeContext(
+            userDictionary,
+            learning =>
+            {
+                userDictionary.Learn(learning);
+                _userDictionarySaveCoordinator.RequestSave(userDictionary.GetEntries());
+            });
+        _ipcServer = new XiaoXiImeIpcServer(ProcessKeyAsync, GetSnapshotAsync, GetUiStateAsync, GetHostStatusAsync, options);
+    }
+
+    private ImeHostService(
+        Func<ImeContext> createImeContext,
+        XiaoXiImeIpcOptions? options,
+        string? dictionaryPackagePath,
+        string? dictionaryLoadError,
+        bool isUsingFallbackDictionary)
     {
         _createImeContext = createImeContext ?? throw new ArgumentNullException(nameof(createImeContext));
+        _dictionaryPackagePath = dictionaryPackagePath;
+        _dictionaryLoadError = dictionaryLoadError;
+        _isUsingFallbackDictionary = isUsingFallbackDictionary;
         _ipcServer = new XiaoXiImeIpcServer(ProcessKeyAsync, GetSnapshotAsync, GetUiStateAsync, GetHostStatusAsync, options);
     }
 
@@ -99,7 +153,14 @@ public sealed class ImeHostService : IDisposable
     {
         lock (_syncRoot)
         {
-            return Task.FromResult(new ImeHostStatus(_started, _lastError));
+            return Task.FromResult(new ImeHostStatus(
+                _started,
+                _lastError ?? _dictionaryLoadError,
+                _dictionaryPackagePath,
+                _isUsingFallbackDictionary,
+                _userDictionaryPath,
+                _userDictionarySaveError ?? _userDictionaryLoadError,
+                _isolatedUserDictionaryPath));
         }
     }
 
@@ -110,6 +171,7 @@ public sealed class ImeHostService : IDisposable
             _started = false;
         }
 
+        _userDictionarySaveCoordinator?.Dispose();
         _ipcServer.Dispose();
     }
 
@@ -125,6 +187,39 @@ public sealed class ImeHostService : IDisposable
         return imeContext;
     }
 
+    private static RuntimeDictionary LoadRuntimeDictionary(string? dictionaryPackagePath, string? userDictionaryPath)
+    {
+        var packagePath = Path.GetFullPath(dictionaryPackagePath ?? Path.Combine(
+            AppContext.BaseDirectory,
+            DefaultDictionaryPackageDirectoryName));
+        var resolvedUserDictionaryPath = Path.GetFullPath(userDictionaryPath ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "XiaoXiIme",
+            DefaultUserDictionaryFileName));
+        var userDictionaryLoad = UserDictionaryStore.Load(resolvedUserDictionaryPath);
+
+        try
+        {
+            return new RuntimeDictionary(
+                DictionaryPackageLoader.Load(packagePath),
+                packagePath,
+                null,
+                IsFallback: false,
+                resolvedUserDictionaryPath,
+                userDictionaryLoad);
+        }
+        catch (DictionaryPackageException exception)
+        {
+            return new RuntimeDictionary(
+                InMemoryImeDictionary.CreateMinimalFallback(),
+                packagePath,
+                exception.Message,
+                IsFallback: true,
+                resolvedUserDictionaryPath,
+                userDictionaryLoad);
+        }
+    }
+
     private static Func<ImeContext> CreateSingleContextFactory(ImeContext imeContext)
     {
         ArgumentNullException.ThrowIfNull(imeContext);
@@ -133,11 +228,19 @@ public sealed class ImeHostService : IDisposable
         {
             if (used)
             {
-                return new ImeContext(InMemoryImeDictionary.CreateDefault());
+                return new ImeContext(InMemoryImeDictionary.CreateMinimalFallback());
             }
 
             used = true;
             return imeContext;
         };
     }
+
+    private sealed record RuntimeDictionary(
+        IImeDictionary Dictionary,
+        string PackagePath,
+        string? LoadError,
+        bool IsFallback,
+        string UserDictionaryPath,
+        UserDictionaryLoadResult UserDictionaryLoad);
 }

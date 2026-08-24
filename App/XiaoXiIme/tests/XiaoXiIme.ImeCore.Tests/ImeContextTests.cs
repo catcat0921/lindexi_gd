@@ -1,4 +1,4 @@
-﻿using XiaoXiIme.Dictionary;
+using XiaoXiIme.Dictionary;
 using XiaoXiIme.Foundation;
 
 namespace XiaoXiIme.ImeCore.Tests;
@@ -27,6 +27,41 @@ public class ImeContextTests
     }
 
     [Fact]
+    public void ProcessKey_WhenInputIsPrefixThenShowsPhraseCandidateDuringComposition()
+    {
+        var context = CreateContext(new InMemoryImeDictionary(
+        [
+            new ImeCandidate("你", "ni", 100),
+            new ImeCandidate("你好", "ni hao", 200),
+        ]));
+
+        var result = context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        Assert.Collection(
+            result.Snapshot.Candidates,
+            candidate => Assert.Equal("你好", candidate.Text),
+            candidate => Assert.Equal("你", candidate.Text));
+    }
+
+    [Fact]
+    public void ProcessKey_WhenContinuousInputCompletesPhraseThenExactPhraseIsFirst()
+    {
+        var context = CreateContext(new InMemoryImeDictionary(
+        [
+            new ImeCandidate("你好", "ni hao", 200),
+            new ImeCandidate("你好啊", "ni hao a", 300),
+        ]));
+        ImeProcessResult result = default!;
+
+        foreach (var character in "nihao")
+        {
+            result = context.ProcessKey(ImeKey.FromCharacter(character));
+        }
+
+        Assert.Equal("你好", result.Snapshot.Candidates[0].Text);
+    }
+
+    [Fact]
     public void ProcessKey_SpaceCommitsSelectedCandidate()
     {
         var context = CreateContext();
@@ -39,6 +74,35 @@ public class ImeContextTests
         Assert.True(result.Handled);
         Assert.Equal("呢", result.CommitText);
         Assert.False(result.Snapshot.IsComposing);
+    }
+
+    [Fact]
+    public void ProcessKey_WhenCandidateCommittedThenReportsCandidateAndOriginalInputForLearning()
+    {
+        ImeDictionaryLearning? learning = null;
+        var context = new ImeContext(
+            new InMemoryImeDictionary([new ImeCandidate("你", "ni", 100)]),
+            value => learning = value);
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+        context.ProcessKey(ImeKey.FromCharacter('i'));
+
+        context.ProcessKey(new ImeKey(ImeKeyKind.Space));
+
+        Assert.Equal(new ImeDictionaryLearning(new ImeCandidate("你", "ni", 100), "ni"), learning);
+    }
+
+    [Fact]
+    public void ProcessKey_WhenReadingCommittedThenDoesNotReportLearning()
+    {
+        var learningCount = 0;
+        var context = new ImeContext(
+            new InMemoryImeDictionary([new ImeCandidate("你", "ni", 100)]),
+            _ => learningCount++);
+        context.ProcessKey(ImeKey.FromCharacter('x'));
+
+        context.ProcessKey(new ImeKey(ImeKeyKind.Enter));
+
+        Assert.Equal(0, learningCount);
     }
 
     [Fact]
@@ -293,7 +357,7 @@ public class ImeContextTests
 
         Assert.True(result.Handled);
         Assert.Equal("n", result.Snapshot.Composition.Reading);
-        Assert.Empty(result.Snapshot.Candidates);
+        Assert.Equal(2, result.Snapshot.Candidates.Count);
     }
 
     [Fact]
@@ -314,7 +378,7 @@ public class ImeContextTests
         Assert.Equal(0, result.Snapshot.CandidateWindow.Selection);
         Assert.Equal(0, backspaceResult.Snapshot.CandidateWindow.Selection);
         Assert.Equal(0, backspaceResult.Snapshot.CandidateWindow.PageStart);
-        Assert.Equal(2, backspaceResult.Snapshot.CandidateWindow.PageSize);
+        Assert.Equal(3, backspaceResult.Snapshot.CandidateWindow.PageSize);
     }
 
     [Fact]
@@ -367,6 +431,117 @@ public class ImeContextTests
 
         Assert.False(result.Handled);
         Assert.False(result.Snapshot.IsComposing);
+    }
+
+    [Fact]
+    public void ProcessKey_WhenUppercaseShapeFollowsPhoneticThenFiltersCandidates()
+    {
+        var context = new ImeContext(new MultiResourceDictionary());
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+        context.ProcessKey(ImeKey.FromCharacter('i'));
+
+        var result = context.ProcessKey(ImeKey.FromCharacter('A'));
+
+        Assert.Collection(result.Snapshot.Candidates, candidate => Assert.Equal("你", candidate.Text));
+    }
+
+    [Fact]
+    public void ProcessKey_WhenUppercaseShapeStartsCompositionThenQueriesSingleCharacters()
+    {
+        var context = new ImeContext(new MultiResourceDictionary());
+
+        var result = context.ProcessKey(ImeKey.FromCharacter('A'));
+
+        Assert.Equal("A", result.Snapshot.Composition.Reading);
+        Assert.Collection(result.Snapshot.Candidates, candidate => Assert.Equal("你", candidate.Text));
+    }
+
+    [Fact]
+    public void ProcessKey_WhenSlashInputMatchesSymbolThenShowsSymbolCandidates()
+    {
+        var context = new ImeContext(new MultiResourceDictionary());
+        context.ProcessKey(ImeKey.FromCharacter('/'));
+        context.ProcessKey(ImeKey.FromCharacter('X'));
+
+        var result = context.ProcessKey(ImeKey.FromCharacter('H'));
+
+        Assert.Equal("/xh", result.Snapshot.Composition.Reading);
+        Assert.Collection(
+            result.Snapshot.Candidates,
+            candidate => Assert.Equal("★", candidate.Text),
+            candidate => Assert.Equal("☆", candidate.Text));
+    }
+
+    [Fact]
+    public void ProcessKey_WhenSymbolInputContainsDigitThenDigitExtendsComposition()
+    {
+        var context = new ImeContext(new MultiResourceDictionary());
+        context.ProcessKey(ImeKey.FromCharacter('/'));
+
+        var result = context.ProcessKey(ImeKey.SelectCandidate(0));
+
+        Assert.Equal("/1", result.Snapshot.Composition.Reading);
+        Assert.Collection(result.Snapshot.Candidates, candidate => Assert.Equal("一", candidate.Text));
+    }
+
+    [Theory]
+    [InlineData("A")]
+    [InlineData("/xh")]
+    public void ProcessKey_WhenNonPhoneticCandidateCommittedThenDoesNotReportLearning(string input)
+    {
+        var learningCount = 0;
+        var context = new ImeContext(new MultiResourceDictionary(), _ => learningCount++);
+        foreach (var character in input)
+        {
+            context.ProcessKey(ImeKey.FromCharacter(character));
+        }
+
+        context.ProcessKey(new ImeKey(ImeKeyKind.Space));
+
+        Assert.Equal(0, learningCount);
+    }
+
+    private sealed class MultiResourceDictionary : IImeDictionary, IShapeDictionary, ISymbolDictionary
+    {
+        private static readonly IReadOnlyList<ImeCandidate> PhoneticCandidates =
+        [
+            new ImeCandidate("你", "ni", 100),
+            new ImeCandidate("呢", "ni", 90),
+        ];
+
+        public IReadOnlyList<ImeCandidate> Query(ImeDictionaryQuery query)
+        {
+            return query.Input.Equals("ni", StringComparison.OrdinalIgnoreCase)
+                ? PhoneticCandidates.Take(query.MaxCount).ToArray()
+                : [];
+        }
+
+        public IReadOnlyList<ShapeDictionaryEntry> QueryShape(string shapeCode, int maxCount = 9)
+        {
+            return shapeCode.Equals("a", StringComparison.OrdinalIgnoreCase)
+                ? [new ShapeDictionaryEntry("你", "ab", "亻尔")]
+                : [];
+        }
+
+        public IReadOnlyList<ImeCandidate> FilterByShape(
+            IReadOnlyList<ImeCandidate> candidates,
+            string shapeCode,
+            int maxCount = 9)
+        {
+            return shapeCode.Equals("a", StringComparison.OrdinalIgnoreCase)
+                ? candidates.Where(candidate => candidate.Text == "你").Take(maxCount).ToArray()
+                : [];
+        }
+
+        public IReadOnlyList<ImeCandidate> QuerySymbols(string input, int maxCount = 9)
+        {
+            return input.ToLowerInvariant() switch
+            {
+                "/xh" => [new ImeCandidate("★", input), new ImeCandidate("☆", input)],
+                "/1" => [new ImeCandidate("一", input)],
+                _ => [],
+            };
+        }
     }
 
     private static ImeContext CreateContext()

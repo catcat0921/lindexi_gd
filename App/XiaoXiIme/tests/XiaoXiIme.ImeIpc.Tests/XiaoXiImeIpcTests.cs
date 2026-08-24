@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using XiaoXiIme.Foundation;
 
 namespace XiaoXiIme.ImeIpc.Tests;
@@ -112,14 +112,20 @@ public class XiaoXiImeIpcTests
     [Fact]
     public void JsonSerializerContext_RoundTripsHostStatusResponseForAot()
     {
-        var response = new ImeHostStatusResponse(new ImeHostStatus(IsRunning: true));
+        var response = new ImeHostStatusResponse(new ImeHostStatus(
+            IsRunning: true,
+            LastError: "Fallback dictionary is active.",
+            DictionaryPackagePath: @"C:\XiaoXiIme.DictionaryPackage",
+            IsUsingFallbackDictionary: true));
 
         var json = JsonSerializer.Serialize(response, XiaoXiImeIpcJsonSerializerContext.Default.ImeHostStatusResponse);
         var deserialized = JsonSerializer.Deserialize(json, XiaoXiImeIpcJsonSerializerContext.Default.ImeHostStatusResponse);
 
         Assert.NotNull(deserialized);
         Assert.True(deserialized.Status.IsRunning);
-        Assert.Null(deserialized.Status.LastError);
+        Assert.Equal("Fallback dictionary is active.", deserialized.Status.LastError);
+        Assert.Equal(@"C:\XiaoXiIme.DictionaryPackage", deserialized.Status.DictionaryPackagePath);
+        Assert.True(deserialized.Status.IsUsingFallbackDictionary);
     }
 
     [Fact]

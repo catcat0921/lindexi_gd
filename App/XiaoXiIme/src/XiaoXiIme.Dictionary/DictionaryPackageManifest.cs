@@ -25,7 +25,7 @@ public sealed record DictionaryPackageSource(string Path, long Length);
 
 public sealed record DictionaryPackageParameters
 {
-    public string InputScheme { get; init; } = "fullPinyin";
+    public string InputScheme { get; init; } = DictionaryPackageFormat.FullPinyinInputScheme;
 
     public bool EnablePrefixIndex { get; init; } = true;
 
@@ -41,4 +41,8 @@ public sealed record DictionaryPackageCounts
     public int ExactKeys { get; init; }
 
     public int PrefixKeys { get; init; }
+
+    public int ShapeEntries { get; init; }
+
+    public int SymbolInputs { get; init; }
 }

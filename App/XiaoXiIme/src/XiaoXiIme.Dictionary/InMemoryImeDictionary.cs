@@ -12,17 +12,22 @@ public sealed class InMemoryImeDictionary : IImeDictionary
 
         _entries = entries
             .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Reading) && !string.IsNullOrWhiteSpace(candidate.Text))
-            .GroupBy(candidate => candidate.Reading, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(candidate => DictionaryPackageFormat.NormalizeLookupKey(candidate.Reading), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group
                     .OrderByDescending(candidate => candidate.Score)
                     .ThenBy(candidate => candidate.Text, StringComparer.Ordinal)
                     .ToList(),
-                StringComparer.OrdinalIgnoreCase);
+                StringComparer.Ordinal);
     }
 
-    public static InMemoryImeDictionary CreateDefault() => new(
+    public static InMemoryImeDictionary CreateDefault() => CreateMinimalFallback();
+
+    /// <summary>
+    /// Creates the small built-in dictionary used only when the production dictionary is unavailable.
+    /// </summary>
+    public static InMemoryImeDictionary CreateMinimalFallback() => new(
     [
         new("你", "ni", 100),
         new("呢", "ni", 60),
@@ -47,7 +52,7 @@ public sealed class InMemoryImeDictionary : IImeDictionary
             return Array.Empty<ImeCandidate>();
         }
 
-        var input = query.Input.Trim();
+        var input = DictionaryPackageFormat.NormalizeLookupKey(query.Input);
         if (query.MatchMode == ImeDictionaryMatchMode.Exact)
         {
             return _entries.TryGetValue(input, out var candidates)
@@ -56,11 +61,11 @@ public sealed class InMemoryImeDictionary : IImeDictionary
         }
 
         return _entries
-            .Where(entry => entry.Key.StartsWith(input, StringComparison.OrdinalIgnoreCase))
+            .Where(entry => entry.Key.StartsWith(input, StringComparison.Ordinal))
             .SelectMany(entry => entry.Value.Select(candidate => new
             {
                 Candidate = candidate,
-                IsExact = string.Equals(entry.Key, input, StringComparison.OrdinalIgnoreCase),
+                IsExact = string.Equals(entry.Key, input, StringComparison.Ordinal),
             }))
             .GroupBy(item => (item.Candidate.Text, item.Candidate.Reading))
             .Select(group => group

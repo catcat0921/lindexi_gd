@@ -12,6 +12,10 @@
 - `integration-run [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS [--skip-tsf] [--report <file>]`：仅在可还原 VM 中执行完整验证，并始终在结束时清理输入法。
 - `install [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：校验负载，安装 x64/x86 输入法并保留，供人工体验。
 - `uninstall --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：卸载输入法并清理已部署文件。
+- `dictionary-update <source-directory> <package-directory> [--scheme fullPinyin|xiaoheDoublePinyin]`：递归读取 XiaoXiIme 自有 `*.phonetic.tsv`、可选 `*.shape.tsv`/`*.symbols.tsv`，暂存编译并验证后更新 package，旧版本保留为同级 `.previous` 目录。
+- `dictionary-rollback <package-directory>`：验证并交换当前 package 与 `.previous` 版本；不读取源目录。
+- `dictionary-convert-sewzc <copied-snapshot-directory> <target-directory>`：一次性把已人工复制、与工作区解耦的 SeWZC `data/dictionaries` 快照转换为 XiaoXiIme 自有 TSV；固定输出 `phonetic/sewzc-default.phonetic.tsv`、`shape/sewzc-moqi.shape.tsv`、`symbols/sewzc-default.symbols.tsv`，全部通过正式解析器验证后才成组替换。该命令不接受仓库相对引用，也不进入运行时查询路径。
+- `payload-build` 会从 `data/dictionaries` 的 XiaoXiIme 原生 TSV 编译全拼 `app/host/XiaoXiIme.DictionaryPackage` 和小鹤双拼 `app/host/XiaoXiIme.DictionaryPackages/xiaoheDoublePinyin`，再将两个 package 纳入负载文件校验。
 
 真实安装和注册涉及管理员权限及系统注册表，`install`、`uninstall` 和 `integration-run` 必须在管理员终端及可还原 Windows 环境中执行。
 
@@ -61,7 +65,7 @@ integration-payload/
 │       └── tools/    # 64 位 TSF ABI Host
 └── app/
 	├── cli/          # VM 命令入口
-	├── host/         # IPC 上层宿主应用
+	├── host/         # IPC 上层宿主应用及全拼/小鹤双拼正式词库 package
 	└── tests/        # 集成测试程序集及运行依赖
 ```
 

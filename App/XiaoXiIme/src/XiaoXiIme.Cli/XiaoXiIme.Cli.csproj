@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\XiaoXiIme.Dictionary\XiaoXiIme.Dictionary.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="XiaoXiIme.Cli.Tests" />
   </ItemGroup>
 

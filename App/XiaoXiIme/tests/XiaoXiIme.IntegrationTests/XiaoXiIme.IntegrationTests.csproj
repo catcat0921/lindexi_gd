@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\XiaoXiIme.Dictionary\XiaoXiIme.Dictionary.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.Foundation\XiaoXiIme.Foundation.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.ImeHost\XiaoXiIme.ImeHost.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.ImeIpc\XiaoXiIme.ImeIpc.csproj" />

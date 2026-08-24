@@ -85,4 +85,5 @@ public static class ImeConstants
     public const ushort Vk9 = 0x39;
     public const ushort VkA = 0x41;
     public const ushort VkZ = 0x5A;
+    public const ushort VkOem2 = 0xBF;
 }
