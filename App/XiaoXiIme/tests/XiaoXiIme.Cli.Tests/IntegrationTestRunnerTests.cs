@@ -23,6 +23,34 @@ public sealed class IntegrationTestRunnerTests
     }
 
     [Fact]
+    public void SuccessfulStageOmitsDetailsByDefault()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var console = new StructuredConsole(output, error);
+        var result = new IntegrationStageResult("probe", true, 0, "Stage passed.", "large stdout", "", new { Value = 42 });
+
+        IntegrationTestRunner.LogResult(console, result, verbose: false);
+
+        using var document = JsonDocument.Parse(output.ToString());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("data").ValueKind);
+    }
+
+    [Fact]
+    public void FailedStageIncludesDetailsByDefault()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var console = new StructuredConsole(output, error);
+        var result = new IntegrationStageResult("probe", false, 1, "Stage failed.", "stdout", "stderr", new { Value = 42 });
+
+        IntegrationTestRunner.LogResult(console, result, verbose: false);
+
+        using var document = JsonDocument.Parse(error.ToString());
+        Assert.Equal("stderr", document.RootElement.GetProperty("data").GetProperty("StandardError").GetString());
+    }
+
+    [Fact]
     public void ResolveManifestPathFindsManifestAboveExecutableDirectory()
     {
         using var directory = new TemporaryDirectory();

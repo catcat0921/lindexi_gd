@@ -20,7 +20,7 @@ BEGIN
             VALUE "FileDescription", "XiaoXi Input Method\0"
             VALUE "FileVersion", "1.0.0.0\0"
             VALUE "InternalName", "XiaoXiIme\0"
-            VALUE "OriginalFilename", "XiaoXiIme.ime\0"
+            VALUE "OriginalFilename", "XIAOXI.IME\0"
             VALUE "ProductName", "XiaoXi IME\0"
             VALUE "ProductVersion", "1.0.0.0\0"
         END
