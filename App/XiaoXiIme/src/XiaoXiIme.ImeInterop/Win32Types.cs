@@ -181,6 +181,18 @@ public struct TransMsgList
     public TransMsg Message;
 }
 
+public unsafe struct StyleBuf
+{
+    public uint Style;
+    public fixed char Description[32];
+}
+
+public unsafe struct RegisterWord
+{
+    public char* Reading;
+    public char* Word;
+}
+
 public readonly record struct HInstance(nint Value);
 
 public readonly record struct HWnd(nint Value);

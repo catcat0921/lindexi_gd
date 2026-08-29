@@ -17,6 +17,9 @@ internal sealed class UninstallOptions
 {
     [Option("confirm", Description = "Disposable-VM confirmation token.", ValueName = "token")]
     public string? Confirm { get; init; }
+
+    [Option("purge-user-data", Description = "Also delete the per-user learned dictionary. User data is retained by default.")]
+    public bool PurgeUserData { get; init; }
 }
 
 [Command("install-checklist", Description = "Print the manual Windows IME installation checklist.")]
@@ -70,6 +73,12 @@ internal sealed class PayloadBuildOptions
 
     [Option("no-build", Description = "Collect existing publish outputs without invoking dotnet build/publish.")]
     public bool NoBuild { get; init; }
+
+    [Option("dictionary-source", Description = "XiaoXiIme native TSV directory used to compile payload dictionary packages.", ValueName = "directory")]
+    public string? DictionarySource { get; init; }
+
+    [Option("staging-directory", Description = "Existing publish staging directory used by --no-build tests and local payload assembly.", ValueName = "directory")]
+    public string? StagingDirectory { get; init; }
 
 }
 
@@ -125,4 +134,24 @@ internal sealed class DictionaryConvertSeWzcOptions
 
     [Value(1, Description = "Target XiaoXiIme data/dictionaries directory.")]
     public string? TargetDirectory { get; init; }
+}
+
+[Command("dictionary-inspect", Description = "Validate a dictionary package and report its version, path, entry counts, and SeWZC attribution.")]
+internal sealed class DictionaryInspectOptions
+{
+    [Value(0, Description = "Dictionary package directory.")]
+    public string? PackageDirectory { get; init; }
+
+    [Option("json", Description = "Write the inspection report as JSON.")]
+    public bool Json { get; init; }
+}
+
+[Command("dictionary-build-packages", Description = "Compile full Pinyin and Xiaohe packages from native TSV sources without Native AOT publish.")]
+internal sealed class DictionaryBuildPackagesOptions
+{
+    [Value(0, Description = "XiaoXiIme native TSV source directory.")]
+    public string? SourceDirectory { get; init; }
+
+    [Value(1, Description = "Host output directory that receives both compiled packages.")]
+    public string? HostOutputDirectory { get; init; }
 }

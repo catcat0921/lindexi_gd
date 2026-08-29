@@ -36,6 +36,7 @@ public sealed class UserDictionary : IImeDictionary, IShapeDictionary, ISymbolDi
     /// <inheritdoc />
     public IReadOnlyList<ImeCandidate> Query(string reading, int maxCount = 9)
     {
+        ArgumentNullException.ThrowIfNull(reading);
         return Query(new ImeDictionaryQuery(reading, maxCount));
     }
 
@@ -49,21 +50,98 @@ public sealed class UserDictionary : IImeDictionary, IShapeDictionary, ISymbolDi
         }
 
         var input = DictionaryPackageFormat.NormalizeLookupKey(query.Input);
-        var systemCandidates = _systemDictionary.Query(query);
+        var exactSystem = _systemDictionary.Query(new ImeDictionaryQuery(query.Input, query.MaxCount));
+        var systemCandidates = query.MatchMode == ImeDictionaryMatchMode.ExactAndPrefix
+            ? _systemDictionary.Query(query)
+            : exactSystem;
+        var exactTexts = exactSystem
+            .Select(candidate => candidate.Text)
+            .ToHashSet(StringComparer.Ordinal);
+        var systemSourceKind = _systemDictionary is InMemoryImeDictionary
+            ? DictionaryCandidateSourceKind.Fallback
+            : DictionaryCandidateSourceKind.System;
         lock (_syncRoot)
         {
-            var userCandidates = _frequencies
-                .Where(entry => string.Equals(entry.Key.Reading, input, StringComparison.Ordinal))
-                .OrderByDescending(entry => entry.Value)
-                .ThenBy(entry => entry.Key.Text, StringComparer.Ordinal)
-                .Select(entry => new ImeCandidate(entry.Key.Text, entry.Key.Reading, entry.Value));
+            var ranked = new List<DictionaryCandidate>(systemCandidates.Count + 4);
+            foreach (var candidate in systemCandidates)
+            {
+                ranked.Add(new DictionaryCandidate(
+                    candidate.Text,
+                    candidate.Reading,
+                    candidate.Score,
+                    systemSourceKind,
+                    exactTexts.Contains(candidate.Text)
+                        ? DictionaryCandidateMatchKind.Exact
+                        : DictionaryCandidateMatchKind.Prefix,
+                    _frequencies.GetValueOrDefault(new UserDictionaryKey(candidate.Text, input))));
+            }
 
-            return userCandidates
-                .Concat(systemCandidates)
-                .GroupBy(candidate => candidate.Text, StringComparer.Ordinal)
-                .Select(group => group.First())
-                .Take(query.MaxCount)
-                .ToArray();
+            foreach (var entry in _frequencies)
+            {
+                if (!string.Equals(entry.Key.Reading, input, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                ranked.Add(new DictionaryCandidate(
+                    entry.Key.Text,
+                    entry.Key.Reading,
+                    BaseFrequency: 0,
+                    DictionaryCandidateSourceKind.User,
+                    DictionaryCandidateMatchKind.Exact,
+                    entry.Value));
+            }
+
+            return DictionaryCandidateRanking.Rank(ranked, query.MaxCount);
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ImeCandidate> QueryByText(string text, int maxCount = 9)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (string.IsNullOrWhiteSpace(text) || maxCount <= 0)
+        {
+            return [];
+        }
+
+        var systemCandidates = _systemDictionary.QueryByText(text, maxCount);
+        var systemSourceKind = _systemDictionary is InMemoryImeDictionary
+            ? DictionaryCandidateSourceKind.Fallback
+            : DictionaryCandidateSourceKind.System;
+        lock (_syncRoot)
+        {
+            var ranked = new List<DictionaryCandidate>(systemCandidates.Count + 4);
+            foreach (var candidate in systemCandidates)
+            {
+                ranked.Add(new DictionaryCandidate(
+                    candidate.Text,
+                    candidate.Reading,
+                    candidate.Score,
+                    systemSourceKind,
+                    DictionaryCandidateMatchKind.Exact,
+                    _frequencies.GetValueOrDefault(new UserDictionaryKey(
+                        candidate.Text,
+                        DictionaryPackageFormat.NormalizeLookupKey(candidate.Reading)))));
+            }
+
+            foreach (var entry in _frequencies)
+            {
+                if (!string.Equals(entry.Key.Text, text, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                ranked.Add(new DictionaryCandidate(
+                    entry.Key.Text,
+                    entry.Key.Reading,
+                    BaseFrequency: 0,
+                    DictionaryCandidateSourceKind.User,
+                    DictionaryCandidateMatchKind.Exact,
+                    entry.Value));
+            }
+
+            return DictionaryCandidateRanking.RankReadings(ranked, maxCount);
         }
     }
 
@@ -125,13 +203,36 @@ public sealed class UserDictionary : IImeDictionary, IShapeDictionary, ISymbolDi
     }
 
     /// <summary>
+    /// Removes a previously learned user word.
+    /// </summary>
+    public bool Forget(string text, string reading)
+    {
+        if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(reading))
+        {
+            return false;
+        }
+
+        var key = new UserDictionaryKey(text, DictionaryPackageFormat.NormalizeLookupKey(reading));
+        lock (_syncRoot)
+        {
+            return _frequencies.Remove(key);
+        }
+    }
+
+    /// <summary>
     /// Returns a stable snapshot suitable for persistence.
     /// </summary>
-    public IReadOnlyList<UserDictionaryEntry> GetEntries()
+    public IReadOnlyList<UserDictionaryEntry> GetEntries(string? reading = null, string? text = null)
     {
+        var normalizedReading = string.IsNullOrWhiteSpace(reading)
+            ? null
+            : DictionaryPackageFormat.NormalizeLookupKey(reading);
         lock (_syncRoot)
         {
             return _frequencies
+                .Where(entry =>
+                    (normalizedReading is null || string.Equals(entry.Key.Reading, normalizedReading, StringComparison.Ordinal))
+                    && (string.IsNullOrWhiteSpace(text) || string.Equals(entry.Key.Text, text, StringComparison.Ordinal)))
                 .OrderBy(entry => entry.Key.Reading, StringComparer.Ordinal)
                 .ThenBy(entry => entry.Key.Text, StringComparer.Ordinal)
                 .Select(entry => new UserDictionaryEntry(entry.Key.Text, entry.Key.Reading, entry.Value))

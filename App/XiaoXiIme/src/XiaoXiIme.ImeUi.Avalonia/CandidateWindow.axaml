@@ -1,67 +1,73 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="XiaoXiIme.ImeUi.Avalonia.CandidateWindow"
-        Title="XiaoXiIme Candidate Window"
-        x:DataType="local:CandidateWindowViewState"
         xmlns:local="using:XiaoXiIme.ImeUi.Avalonia"
-        Width="360"
-        SizeToContent="Height"
+        x:Class="XiaoXiIme.ImeUi.Avalonia.CandidateWindow"
+        x:DataType="local:CandidateWindowViewState"
+        Title="XiaoXiIme Candidate Window"
+        SizeToContent="WidthAndHeight"
+        MinWidth="320"
+        MaxWidth="760"
         CanResize="False"
         ShowInTaskbar="False"
         ShowActivated="False"
         Topmost="True"
         SystemDecorations="None"
-        TransparencyLevelHint="AcrylicBlur, Transparent"
-        Background="Transparent">
-  <Border Margin="6"
-          Padding="12,10"
-          CornerRadius="10"
-          Background="#F7FFFFFF"
-          BorderBrush="#33000000"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="Microsoft YaHei UI, Segoe UI, Inter">
+  <Border Margin="8"
+          Padding="8,6"
+          CornerRadius="8"
+          Background="#FFFFFFFF"
+          BorderBrush="#26000000"
           BorderThickness="1"
-          BoxShadow="0 4 14 0 #33000000">
-    <StackPanel Spacing="8">
-      <Grid ColumnDefinitions="*,Auto">
+          BoxShadow="0 4 14 0 #26000000">
+    <StackPanel Spacing="4">
+      <Grid Margin="4,0"
+            ColumnDefinitions="*,Auto">
         <TextBlock Text="{Binding CompositionText}"
-                   FontSize="13"
-                   Foreground="#6B7280" />
+                   VerticalAlignment="Center"
+                   FontSize="14"
+                   Foreground="#2563EB" />
         <TextBlock Grid.Column="1"
+                   Margin="16,0,2,0"
                    Text="{Binding PageText}"
+                   IsVisible="{Binding HasPageText}"
+                   VerticalAlignment="Center"
                    FontSize="12"
-                   Foreground="#9CA3AF" />
+                   Foreground="#666666" />
       </Grid>
+
+      <Border Height="1"
+              Background="#12000000" />
+
       <ItemsControl ItemsSource="{Binding Candidates}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal"
+                        Spacing="4" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="local:CandidateWindowCandidateViewModel">
-            <Border Padding="8,5"
-                    Margin="0,1"
-                    CornerRadius="6"
+            <Border Padding="10,5"
+                    CornerRadius="5"
                     Background="{Binding Background}">
-              <Grid ColumnDefinitions="28,*,Auto">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="5">
                 <TextBlock Text="{Binding DisplayIndex}"
                            VerticalAlignment="Center"
-                           Foreground="{Binding Foreground}" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding Text}"
-                           VerticalAlignment="Center"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Foreground="{Binding Foreground}" />
-                <TextBlock Grid.Column="2"
-                           Text="{Binding Reading}"
-                           VerticalAlignment="Center"
                            FontSize="12"
-                           Foreground="{Binding SecondaryForeground}" />
-              </Grid>
+                           Foreground="{Binding IndexForeground}" />
+                <TextBlock Text="{Binding Text}"
+                           VerticalAlignment="Center"
+                           FontSize="17"
+                           Foreground="{Binding Foreground}" />
+              </StackPanel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-      <TextBlock Text="{Binding GuidelineText}"
-                 IsVisible="{Binding HasGuideline}"
-                 FontSize="12"
-                 Foreground="#B45309"
-                 TextWrapping="Wrap" />
     </StackPanel>
   </Border>
 </Window>

@@ -16,6 +16,8 @@ public static class CandidateWindowStateMapper
                 GuidelineText = uiState.Guideline.Text,
                 AnchorX = uiState.AnchorX,
                 AnchorY = uiState.AnchorY,
+                AttributionText = uiState.EffectiveAbout.Notice,
+                DiagnosticText = uiState.DiagnosticText ?? string.Empty,
             };
         }
 
@@ -48,7 +50,9 @@ public static class CandidateWindowStateMapper
             TotalPages: (candidateCount + pageSize - 1) / pageSize,
             uiState.Guideline.Text,
             uiState.AnchorX,
-            uiState.AnchorY);
+            uiState.AnchorY,
+            uiState.EffectiveAbout.Notice,
+            uiState.DiagnosticText ?? string.Empty);
     }
 
     private static int NormalizePageSize(int pageSize, int candidateCount)

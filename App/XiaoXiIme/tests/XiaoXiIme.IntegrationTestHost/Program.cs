@@ -7,6 +7,7 @@ using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32;
+using XiaoXiIme.Dictionary;
 using XiaoXiIme.Foundation;
 using XiaoXiIme.ImeHost;
 using XiaoXiIme.ImeIpc;
@@ -67,18 +68,19 @@ static Task RunCandidateWindowStateAsync()
 static async Task RunImeHostIpcAsync()
 {
     var options = new XiaoXiImeIpcOptions($"XiaoXiIme_Integration_{Guid.NewGuid():N}");
-    using var host = new ImeHostService(options);
+    var hostRoot = ResolveHostBaseDirectory();
+    using var host = new ImeHostService(options, hostBaseDirectory: hostRoot);
     using var client = new XiaoXiImeIpcClient(options);
 
     host.Start();
-    await client.ConnectAsync();
-
-    var status = await client.GetHostStatusAsync();
+    var status = await client.WaitUntilReadyAsync();
     await client.ProcessKeyAsync(ImeKey.FromCharacter('n'));
     var composingResult = await client.ProcessKeyAsync(ImeKey.FromCharacter('i'));
     var uiState = await client.GetUiStateAsync();
 
     Ensure(status.IsRunning, "IME host should be running.");
+    Ensure(!status.IsUsingFallbackDictionary, "IME host should load the production dictionary package from the payload host layout.");
+    Ensure(status.DictionaryInputScheme == DictionaryPackageLocations.FullPinyinInputScheme, "IME host should report the full Pinyin input scheme.");
     Ensure(composingResult.Handled && composingResult.Snapshot.IsComposing, "IME should be composing after 'ni'.");
     Ensure(composingResult.Snapshot.Composition.Reading == "ni", "Composition reading mismatch.");
     Ensure(composingResult.Snapshot.Candidates.Count > 0 && composingResult.Snapshot.Candidates[0].Text == "你", "Expected candidate was not returned.");
@@ -97,6 +99,29 @@ static Task RunRealImeKeystrokeCommitAsync()
     }
 
     return Win32ImeEditScenario.RunAsync();
+}
+
+static string ResolveHostBaseDirectory()
+{
+    var directory = new DirectoryInfo(AppContext.BaseDirectory);
+    while (directory is not null)
+    {
+        var payloadHost = Path.Combine(directory.FullName, "app", "host");
+        if (Directory.Exists(Path.Combine(payloadHost, DictionaryPackageLocations.FullPinyinPackageDirectoryName)))
+        {
+            return payloadHost;
+        }
+
+        if (Directory.Exists(Path.Combine(directory.FullName, DictionaryPackageLocations.FullPinyinPackageDirectoryName)))
+        {
+            return directory.FullName;
+        }
+
+        directory = directory.Parent;
+    }
+
+    throw new DirectoryNotFoundException(
+        "Unable to locate the payload host dictionary layout. Copy XiaoXiIme.DictionaryPackage under app/host before running IntegrationTestHost.");
 }
 
 static void Ensure(bool condition, string message)
@@ -686,10 +711,15 @@ internal static class Win32ImeEditScenario
         public uint LastCompositionWriteSucceeded;
         public uint LastMessageCount;
         public uint LastReturnValue;
+        public uint ProcessKeyHandledCount;
+        public uint ToAsciiHandledCount;
+        public uint LastProcessError;
+        public uint LastToAsciiError;
+        public uint LastToAsciiStage;
 
         public override readonly string ToString()
         {
-            return $"ImeTraceVersion={Version}, ImeInquireCalls={ImeInquireCallCount}, ImeSelectCalls={ImeSelectCallCount}, ImeSetActiveContextCalls={ImeSetActiveContextCallCount}, NotifyImeCalls={NotifyImeCallCount}, ImeProcessKeyCalls={ImeProcessKeyCallCount}, ImeToAsciiExCalls={ImeToAsciiExCallCount}, LastProcessVk=0x{LastProcessVirtualKey:X}, LastProcessHandled={LastProcessHandled != 0}, LastToAsciiVk=0x{LastToAsciiVirtualKey:X}, LastToAsciiHandled={LastToAsciiHandled != 0}, CompositionWriteSucceeded={LastCompositionWriteSucceeded != 0}, MessageCount={LastMessageCount}, ReturnValue={LastReturnValue}.";
+            return $"ImeTraceVersion={Version}, ImeInquireCalls={ImeInquireCallCount}, ImeSelectCalls={ImeSelectCallCount}, ImeSetActiveContextCalls={ImeSetActiveContextCallCount}, NotifyImeCalls={NotifyImeCallCount}, ImeProcessKeyCalls={ImeProcessKeyCallCount}, ProcessKeyHandledCalls={ProcessKeyHandledCount}, ImeToAsciiExCalls={ImeToAsciiExCallCount}, ToAsciiHandledCalls={ToAsciiHandledCount}, LastProcessVk=0x{LastProcessVirtualKey:X}, LastProcessHandled={LastProcessHandled != 0}, LastProcessError=0x{LastProcessError:X8}, LastToAsciiVk=0x{LastToAsciiVirtualKey:X}, LastToAsciiHandled={LastToAsciiHandled != 0}, LastToAsciiError=0x{LastToAsciiError:X8}, LastToAsciiStage={LastToAsciiStage}, CompositionWriteSucceeded={LastCompositionWriteSucceeded != 0}, MessageCount={LastMessageCount}, ReturnValue={LastReturnValue}.";
         }
     }
 

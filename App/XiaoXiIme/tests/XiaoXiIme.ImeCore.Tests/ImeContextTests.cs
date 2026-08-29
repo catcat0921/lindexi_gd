@@ -124,6 +124,190 @@ public class ImeContextTests
     }
 
     [Fact]
+    public void ProcessKey_WhenCompiledPackageContainsAbbreviationThenSecondXCommitsXiaoXi()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(
+            [new PhoneticDictionaryEntry("小希", "xx", 100)],
+            packagePath,
+            new DictionaryPackageParameters { InputScheme = "xiaoheDoublePinyin" });
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+
+        var composingResult = context.ProcessKey(ImeKey.FromCharacter('x'));
+        var commitResult = context.ProcessKey(ImeKey.FromCharacter('x'));
+
+        Assert.True(composingResult.Handled);
+        Assert.Null(composingResult.CommitText);
+        Assert.Equal("小希", commitResult.CommitText);
+        Assert.False(commitResult.Snapshot.IsComposing);
+    }
+
+    [Fact]
+    public void ProcessKey_WhenCompiledXiaohePackageContainsProjectTermThenProjectedKeysCommit()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(
+            XiaoXiImeProjectTerms.Parse(),
+            packagePath,
+            new DictionaryPackageParameters { InputScheme = DictionaryPackageLocations.XiaoheDoublePinyinInputScheme });
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+        ImeProcessResult result = default!;
+
+        foreach (var character in "xnxiaimuyi")
+        {
+            result = context.ProcessKey(ImeKey.FromCharacter(character));
+        }
+
+        Assert.Equal("XiaoXiIme", result.Snapshot.Candidates[0].Text);
+        Assert.Equal("XiaoXiIme", context.ProcessKey(new ImeKey(ImeKeyKind.Space)).CommitText);
+    }
+
+    [Fact]
+    public void ProcessKey_WhenCompiledFullPinyinPackageContainsProjectTermThenCanonicalKeysCommit()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(XiaoXiImeProjectTerms.Parse(), packagePath);
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+        ImeProcessResult result = default!;
+
+        foreach (var character in "xiaoxiaimuyi")
+        {
+            result = context.ProcessKey(ImeKey.FromCharacter(character));
+        }
+
+        Assert.Equal("XiaoXiIme", result.Snapshot.Candidates[0].Text);
+        Assert.Equal("XiaoXiIme", context.ProcessKey(new ImeKey(ImeKeyKind.Space)).CommitText);
+    }
+
+    [Fact]
+    public void SetComposition_WhenCanonicalProjectTermIsReplacedThenDoesNotAutoCommitAbbreviation()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(XiaoXiImeProjectTerms.Parse(), packagePath);
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+
+        var result = context.SetComposition("xiaoxiaimuyi");
+        var abbreviation = context.SetComposition("xx");
+        var cleared = context.SetComposition(string.Empty);
+
+        Assert.True(result.Handled);
+        Assert.Null(result.CommitText);
+        Assert.Equal("xiaoxiaimuyi", result.Snapshot.Composition.Reading);
+        Assert.Equal("XiaoXiIme", result.Snapshot.Candidates[0].Text);
+        Assert.True(abbreviation.Handled);
+        Assert.Null(abbreviation.CommitText);
+        Assert.Equal("xx", abbreviation.Snapshot.Composition.Reading);
+        Assert.Equal("小希", abbreviation.Snapshot.Candidates[0].Text);
+        Assert.True(cleared.Handled);
+        Assert.False(cleared.Snapshot.IsComposing);
+        Assert.Empty(cleared.Snapshot.Candidates);
+    }
+
+    [Fact]
+    public void SetComposition_WhenInputContainsInvalidCharactersThenLeavesCurrentComposition()
+    {
+        var context = CreateContext();
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var result = context.SetComposition("ni hao");
+
+        Assert.False(result.Handled);
+        Assert.Equal("n", result.Snapshot.Composition.Reading);
+        Assert.True(result.Snapshot.IsComposing);
+    }
+
+    [Fact]
+    public void QueryConversionList_WhenCanonicalProjectTermThenLeavesCurrentCompositionUnchanged()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(XiaoXiImeProjectTerms.Parse(), packagePath);
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var candidates = context.QueryConversionList("xiaoxiaimuyi");
+        var snapshot = context.Snapshot;
+
+        Assert.Equal("XiaoXiIme", candidates[0].Text);
+        Assert.Equal("n", snapshot.Composition.Reading);
+        Assert.True(snapshot.IsComposing);
+        Assert.Empty(context.QueryConversionList("ni hao"));
+    }
+
+    [Fact]
+    public void QueryReverseConversionList_WhenCanonicalProjectTermThenLeavesCurrentCompositionUnchanged()
+    {
+        var packagePath = Path.Combine(Path.GetTempPath(), "XiaoXiIme.ImeCore.Tests", Guid.NewGuid().ToString("N"));
+        DictionaryPackageCompiler.Compile(XiaoXiImeProjectTerms.Parse(), packagePath);
+        var context = new ImeContext(DictionaryPackageLoader.Load(packagePath));
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var candidates = context.QueryReverseConversionList("XiaoXiIme");
+        var snapshot = context.Snapshot;
+
+        Assert.Equal("xiao xi ai mu yi", candidates[0].Reading);
+        Assert.Equal("XiaoXiIme", candidates[0].Text);
+        Assert.Equal("n", snapshot.Composition.Reading);
+        Assert.True(snapshot.IsComposing);
+        Assert.Empty(context.QueryReverseConversionList("missing"));
+    }
+
+    [Fact]
+    public void RegisterWord_WhenUserDictionaryThenAddsWordWithoutChangingComposition()
+    {
+        var dictionary = new UserDictionary(new InMemoryImeDictionary(
+        [
+            new ImeCandidate("你", "ni", 100),
+        ]));
+        var context = new ImeContext(dictionary);
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var registered = context.RegisterWord("zidingyi", "自定义");
+        var snapshot = context.Snapshot;
+        var entries = context.EnumerateRegisterWords("zidingyi");
+
+        Assert.True(registered);
+        Assert.Equal("n", snapshot.Composition.Reading);
+        Assert.True(snapshot.IsComposing);
+        Assert.Equal("自定义", entries[0].Text);
+        Assert.Equal("zidingyi", entries[0].Reading);
+        Assert.Equal("自定义", dictionary.Query("zidingyi")[0].Text);
+    }
+
+    [Fact]
+    public void UnregisterWord_WhenUserWordExistsThenRemovesItWithoutChangingComposition()
+    {
+        var dictionary = new UserDictionary(new InMemoryImeDictionary(
+        [
+            new ImeCandidate("你", "ni", 100),
+        ]));
+        var context = new ImeContext(dictionary);
+        context.RegisterWord("zidingyi", "自定义");
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var unregistered = context.UnregisterWord("zidingyi", "自定义");
+        var snapshot = context.Snapshot;
+
+        Assert.True(unregistered);
+        Assert.Equal("n", snapshot.Composition.Reading);
+        Assert.True(snapshot.IsComposing);
+        Assert.Empty(context.EnumerateRegisterWords());
+        Assert.Empty(dictionary.Query("zidingyi"));
+    }
+
+    [Fact]
+    public void RegisterWord_WhenDictionaryIsNotUserDictionaryThenReturnsFalse()
+    {
+        var context = CreateContext();
+        context.ProcessKey(ImeKey.FromCharacter('n'));
+
+        var registered = context.RegisterWord("zidingyi", "自定义");
+
+        Assert.False(registered);
+        Assert.Equal("n", context.Snapshot.Composition.Reading);
+        Assert.Empty(context.EnumerateRegisterWords());
+    }
+
+    [Fact]
     public void ProcessKey_SelectCandidateCommitsCandidateInCurrentPage()
     {
         var context = CreatePagedContext();

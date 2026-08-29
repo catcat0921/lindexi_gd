@@ -4,8 +4,10 @@ namespace XiaoXiIme.Cli;
 
 internal static class DefaultDictionaryPackageBuilder
 {
-    internal const string FullPinyinPackageDirectoryName = "XiaoXiIme.DictionaryPackage";
-    internal static readonly string XiaoheDoublePinyinPackageRelativePath = Path.Combine("XiaoXiIme.DictionaryPackages", "xiaoheDoublePinyin");
+    internal const string FullPinyinPackageDirectoryName = DictionaryPackageLocations.FullPinyinPackageDirectoryName;
+    internal const string FullPinyinInputScheme = DictionaryPackageLocations.FullPinyinInputScheme;
+    internal const string XiaoheDoublePinyinInputScheme = DictionaryPackageLocations.XiaoheDoublePinyinInputScheme;
+    internal static readonly string XiaoheDoublePinyinPackageRelativePath = DictionaryPackageLocations.XiaoheDoublePinyinPackageRelativePath;
 
     internal static void Build(string sourceDirectory, string hostOutputDirectory)
     {
@@ -19,16 +21,8 @@ internal static class DefaultDictionaryPackageBuilder
             throw new ArgumentException("A host output directory is required.", nameof(hostOutputDirectory));
         }
 
-        var sourceRoot = Path.GetFullPath(sourceDirectory);
+        var sourceRoot = EnsureRequiredSources(sourceDirectory);
         var hostRoot = Path.GetFullPath(hostOutputDirectory);
-        if (!Directory.Exists(sourceRoot))
-        {
-            throw new DirectoryNotFoundException($"Default dictionary source directory was not found: {sourceRoot}");
-        }
-
-        RequireSource(sourceRoot, "phonetic/sewzc-default.phonetic.tsv");
-        RequireSource(sourceRoot, "shape/sewzc-moqi.shape.tsv");
-        RequireSource(sourceRoot, "symbols/sewzc-default.symbols.tsv");
 
         var phoneticSources = FindSources(sourceRoot, "*.phonetic.tsv");
         var shapeSources = FindSources(sourceRoot, "*.shape.tsv");
@@ -37,14 +31,14 @@ internal static class DefaultDictionaryPackageBuilder
         BuildPackage(
             hostRoot,
             FullPinyinPackageDirectoryName,
-            "fullPinyin",
+            FullPinyinInputScheme,
             phoneticSources,
             shapeSources,
             symbolSources);
         BuildPackage(
             hostRoot,
             XiaoheDoublePinyinPackageRelativePath,
-            "xiaoheDoublePinyin",
+            XiaoheDoublePinyinInputScheme,
             phoneticSources,
             shapeSources,
             symbolSources);
@@ -70,6 +64,26 @@ internal static class DefaultDictionaryPackageBuilder
                 Parameters = new DictionaryPackageParameters { InputScheme = inputScheme },
             },
             packagePath);
+    }
+
+    internal static string EnsureRequiredSources(string sourceDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(sourceDirectory))
+        {
+            throw new ArgumentException("A dictionary source directory is required.", nameof(sourceDirectory));
+        }
+
+        var sourceRoot = Path.GetFullPath(sourceDirectory);
+        if (!Directory.Exists(sourceRoot))
+        {
+            throw new DirectoryNotFoundException($"Default dictionary source directory was not found: {sourceRoot}");
+        }
+
+        RequireSource(sourceRoot, "phonetic/sewzc-default.phonetic.tsv");
+        RequireSource(sourceRoot, XiaoXiImeProjectTerms.OutputRelativePath);
+        RequireSource(sourceRoot, "shape/sewzc-moqi.shape.tsv");
+        RequireSource(sourceRoot, "symbols/sewzc-default.symbols.tsv");
+        return sourceRoot;
     }
 
     private static void RequireSource(string sourceRoot, string relativePath)

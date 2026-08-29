@@ -65,6 +65,7 @@ public static class DictionaryPackageCompiler
         var manifest = new DictionaryPackageManifest
         {
             CreatedBy = "XiaoXiIme.DictionaryCompiler",
+            CompilerVersion = DictionaryPackageManifest.CurrentCompilerVersion,
             Sources = sources ?? [],
             Parameters = parameters,
             Shards = shards,
@@ -184,7 +185,8 @@ public static class DictionaryPackageCompiler
                 item => item.Key,
                 item => item.Value
                     .OrderByDescending(id => entries[id].Frequency)
-                    .ThenBy(id => entries[id].Reading.Length)
+                    .ThenBy(id => lookupKeys[id].Length)
+                    .ThenBy(id => entries[id].Text.Length)
                     .ThenBy(id => entries[id].Text, StringComparer.Ordinal)
                     .Take(maxCandidatesPerKey)
                     .ToArray(),

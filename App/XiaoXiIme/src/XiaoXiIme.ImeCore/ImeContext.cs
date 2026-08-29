@@ -53,6 +53,110 @@ public sealed class ImeContext
         };
     }
 
+    /// <summary>
+    /// Replaces the current composition with the supplied input and refreshes candidates.
+    /// An empty string cancels composition. Unlike typed keys, this does not auto-commit abbreviations.
+    /// </summary>
+    public ImeProcessResult SetComposition(string composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+        if (!IsValidComposition(composition))
+        {
+            return new ImeProcessResult(Snapshot, null, false);
+        }
+
+        if (composition.Length == 0)
+        {
+            Clear();
+            return new ImeProcessResult(Snapshot, null, true);
+        }
+
+        _reading = NormalizeComposition(composition);
+        _caretIndex = _reading.Length;
+        _selection = 0;
+        RefreshCandidates();
+        return new ImeProcessResult(Snapshot, null, true);
+    }
+
+    /// <summary>
+    /// Queries conversion candidates for the supplied input without changing the current composition.
+    /// </summary>
+    public IReadOnlyList<ImeCandidate> QueryConversionList(string composition, int maxCount = 0)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+        if (composition.Length == 0 || !IsValidComposition(composition))
+        {
+            return [];
+        }
+
+        var count = maxCount <= 0 ? MaxCandidateCount : Math.Min(maxCount, MaxCandidateCount);
+        return QueryCandidates(
+            NormalizeComposition(composition),
+            _dictionary,
+            _shapeDictionary,
+            _symbolDictionary,
+            count);
+    }
+
+    /// <summary>
+    /// Queries reverse-conversion readings for the supplied candidate text without changing the current composition.
+    /// </summary>
+    public IReadOnlyList<ImeCandidate> QueryReverseConversionList(string text, int maxCount = 0)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length == 0)
+        {
+            return [];
+        }
+
+        var count = maxCount <= 0 ? MaxCandidateCount : Math.Min(maxCount, MaxCandidateCount);
+        return _dictionary.QueryByText(text, count);
+    }
+
+    /// <summary>
+    /// Adds a phonetic user word without changing the current composition.
+    /// </summary>
+    public bool RegisterWord(string reading, string text)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        ArgumentNullException.ThrowIfNull(text);
+        if (!TryCreateLearning(reading, text, out var learning) || _dictionary is not UserDictionary userDictionary)
+        {
+            return false;
+        }
+
+        if (_learn is not null)
+        {
+            _learn(learning);
+        }
+        else
+        {
+            userDictionary.Learn(learning);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a phonetic user word without changing the current composition.
+    /// </summary>
+    public bool UnregisterWord(string reading, string text)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        ArgumentNullException.ThrowIfNull(text);
+        return _dictionary is UserDictionary userDictionary && userDictionary.Forget(text, reading);
+    }
+
+    /// <summary>
+    /// Enumerates phonetic user words without changing the current composition.
+    /// </summary>
+    public IReadOnlyList<UserDictionaryEntry> EnumerateRegisterWords(string? reading = null, string? text = null)
+    {
+        return _dictionary is UserDictionary userDictionary
+            ? userDictionary.GetEntries(reading, text)
+            : [];
+    }
+
     private bool IsComposing => _reading.Length > 0;
 
     private bool IsSymbolComposition => _reading.Length > 0 && _reading[0] == '/';
@@ -218,38 +322,12 @@ public sealed class ImeContext
 
         if (IsComposing)
         {
-            if (IsSymbolComposition)
-            {
-                _candidates.AddRange(_symbolDictionary?.QuerySymbols(_reading, MaxCandidateCount) ?? []);
-            }
-            else
-            {
-                var shapeStart = FindShapeStart(_reading);
-                if (shapeStart == 0)
-                {
-                    var shapeCode = _reading.ToLowerInvariant();
-                    _candidates.AddRange((_shapeDictionary?.QueryShape(shapeCode, MaxCandidateCount) ?? [])
-                        .Select(entry => new ImeCandidate(entry.Text, entry.ShapeCode)));
-                }
-                else if (shapeStart > 0)
-                {
-                    var phoneticCandidates = _dictionary.Query(new ImeDictionaryQuery(
-                        _reading[..shapeStart],
-                        MaxCandidateCount,
-                        ImeDictionaryMatchMode.ExactAndPrefix));
-                    _candidates.AddRange(_shapeDictionary?.FilterByShape(
-                        phoneticCandidates,
-                        _reading[shapeStart..],
-                        MaxCandidateCount) ?? []);
-                }
-                else
-                {
-                    _candidates.AddRange(_dictionary.Query(new ImeDictionaryQuery(
-                        _reading,
-                        MaxCandidateCount,
-                        ImeDictionaryMatchMode.ExactAndPrefix)));
-                }
-            }
+            _candidates.AddRange(QueryCandidates(
+                _reading,
+                _dictionary,
+                _shapeDictionary,
+                _symbolDictionary,
+                MaxCandidateCount));
         }
 
         NormalizeCandidateWindow();
@@ -333,6 +411,110 @@ public sealed class ImeContext
         }
 
         return IsAsciiLetter(character);
+    }
+
+    private static bool IsValidComposition(string composition)
+    {
+        if (composition.Length == 0)
+        {
+            return true;
+        }
+
+        if (composition[0] == '/')
+        {
+            for (var index = 1; index < composition.Length; index++)
+            {
+                var character = composition[index];
+                if (!IsAsciiLetter(character) && character is not (>= '0' and <= '9'))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        for (var index = 0; index < composition.Length; index++)
+        {
+            if (!IsAsciiLetter(composition[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string NormalizeComposition(string composition)
+    {
+        return composition.Length > 0 && composition[0] == '/'
+            ? composition.ToLowerInvariant()
+            : composition;
+    }
+
+    private static IReadOnlyList<ImeCandidate> QueryCandidates(
+        string composition,
+        IImeDictionary dictionary,
+        IShapeDictionary? shapeDictionary,
+        ISymbolDictionary? symbolDictionary,
+        int maxCount)
+    {
+        if (composition.Length == 0)
+        {
+            return [];
+        }
+
+        if (composition[0] == '/')
+        {
+            return symbolDictionary?.QuerySymbols(composition, maxCount) ?? [];
+        }
+
+        var shapeStart = FindShapeStart(composition);
+        if (shapeStart == 0)
+        {
+            return (shapeDictionary?.QueryShape(composition.ToLowerInvariant(), maxCount) ?? [])
+                .Select(entry => new ImeCandidate(entry.Text, entry.ShapeCode))
+                .ToArray();
+        }
+
+        if (shapeStart > 0)
+        {
+            var phoneticCandidates = dictionary.Query(new ImeDictionaryQuery(
+                composition[..shapeStart],
+                maxCount,
+                ImeDictionaryMatchMode.ExactAndPrefix));
+            return shapeDictionary?.FilterByShape(
+                phoneticCandidates,
+                composition[shapeStart..],
+                maxCount) ?? [];
+        }
+
+        return dictionary.Query(new ImeDictionaryQuery(
+            composition,
+            maxCount,
+            ImeDictionaryMatchMode.ExactAndPrefix));
+    }
+
+    private static bool TryCreateLearning(string reading, string text, out ImeDictionaryLearning learning)
+    {
+        learning = null!;
+        if (string.IsNullOrWhiteSpace(text)
+            || text.Length > PhoneticDictionarySourceParser.MaxTextLength
+            || string.IsNullOrWhiteSpace(reading))
+        {
+            return false;
+        }
+
+        var lookupKey = PhoneticDictionarySourceParser.NormalizeLookupKey(reading);
+        if (lookupKey.Length == 0
+            || lookupKey.Length > PhoneticDictionarySourceParser.MaxReadingLength
+            || !IsPhoneticComposition(lookupKey))
+        {
+            return false;
+        }
+
+        learning = new ImeDictionaryLearning(new ImeCandidate(text, lookupKey), lookupKey);
+        return true;
     }
 
     private static bool IsPhoneticComposition(string input)

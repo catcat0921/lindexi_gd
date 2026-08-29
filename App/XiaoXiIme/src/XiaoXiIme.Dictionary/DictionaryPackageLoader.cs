@@ -23,41 +23,8 @@ public static class DictionaryPackageLoader
 
         try
         {
-            var rootPath = Path.GetFullPath(packageDirectory);
-            var manifestPath = Path.Combine(rootPath, DictionaryPackageFormat.ManifestFileName);
-            var manifestInfo = new FileInfo(manifestPath);
-            if (!manifestInfo.Exists || manifestInfo.Length > DictionaryPackageFormat.MaxManifestBytes)
-            {
-                throw new InvalidDataException(DictionaryResources.InvalidManifestLength);
-            }
-
-            DictionaryPackageManifest manifest;
-            using (var stream = File.OpenRead(manifestPath))
-            {
-                manifest = JsonSerializer.Deserialize<DictionaryPackageManifest>(stream, JsonOptions)
-                    ?? throw new InvalidDataException(DictionaryResources.InvalidManifest);
-            }
-
-            ValidateManifest(manifest);
-            var shards = ValidateShards(rootPath, manifest.Shards);
-            var candidates = ReadCandidates(shards[DictionaryPackageFormat.CandidatesRole], manifest.Counts.Candidates);
-            var exactIndex = ReadIndex(
-                shards[DictionaryPackageFormat.ExactIndexRole],
-                DictionaryPackageFormat.ExactIndexMagic,
-                manifest.Counts.ExactKeys,
-                candidates.Length);
-            var prefixIndex = ReadIndex(
-                shards[DictionaryPackageFormat.PrefixIndexRole],
-                DictionaryPackageFormat.PrefixIndexMagic,
-                manifest.Counts.PrefixKeys,
-                candidates.Length);
-            var shapeEntries = ReadShapeEntries(
-                shards[DictionaryPackageFormat.ShapeIndexRole],
-                manifest.Counts.ShapeEntries);
-            var symbols = ReadSymbolEntries(
-                shards[DictionaryPackageFormat.SymbolsRole],
-                manifest.Counts.SymbolInputs);
-            return new CompiledImeDictionary(candidates, exactIndex, prefixIndex, shapeEntries, symbols);
+            var (manifest, shards) = ReadAndValidatePackage(Path.GetFullPath(packageDirectory));
+            return LoadValidatedPackage(manifest, shards);
         }
         catch (DictionaryPackageException)
         {
@@ -67,6 +34,82 @@ public static class DictionaryPackageLoader
         {
             throw new DictionaryPackageException(packageDirectory, exception.Message);
         }
+    }
+
+    /// <summary>
+    /// Validates a package directory and returns its manifest without keeping shard files open.
+    /// </summary>
+    public static DictionaryPackageInspection Inspect(string packageDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(packageDirectory))
+        {
+            throw new ArgumentException(nameof(packageDirectory), nameof(packageDirectory));
+        }
+
+        try
+        {
+            var rootPath = Path.GetFullPath(packageDirectory);
+            var (manifest, shards) = ReadAndValidatePackage(rootPath);
+            return new DictionaryPackageInspection(rootPath, manifest, shards);
+        }
+        catch (DictionaryPackageException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or ArgumentException)
+        {
+            throw new DictionaryPackageException(packageDirectory, exception.Message);
+        }
+    }
+
+    private static (DictionaryPackageManifest Manifest, Dictionary<string, string> Shards) ReadAndValidatePackage(string rootPath)
+    {
+        var manifestPath = Path.Combine(rootPath, DictionaryPackageFormat.ManifestFileName);
+        var manifestInfo = new FileInfo(manifestPath);
+        if (!manifestInfo.Exists || manifestInfo.Length > DictionaryPackageFormat.MaxManifestBytes)
+        {
+            throw new InvalidDataException(DictionaryResources.InvalidManifestLength);
+        }
+
+        DictionaryPackageManifest manifest;
+        using (var stream = File.OpenRead(manifestPath))
+        {
+            manifest = JsonSerializer.Deserialize<DictionaryPackageManifest>(stream, JsonOptions)
+                ?? throw new InvalidDataException(DictionaryResources.InvalidManifest);
+        }
+
+        ValidateManifest(manifest);
+        return (manifest, ValidateShards(rootPath, manifest.Shards));
+    }
+
+    private static CompiledImeDictionary LoadValidatedPackage(
+        DictionaryPackageManifest manifest,
+        IReadOnlyDictionary<string, string> shards)
+    {
+        var candidates = ReadCandidates(shards[DictionaryPackageFormat.CandidatesRole], manifest.Counts.Candidates);
+        var exactIndex = ReadIndex(
+            shards[DictionaryPackageFormat.ExactIndexRole],
+            DictionaryPackageFormat.ExactIndexMagic,
+            manifest.Counts.ExactKeys,
+            candidates.Length);
+        var prefixIndex = ReadIndex(
+            shards[DictionaryPackageFormat.PrefixIndexRole],
+            DictionaryPackageFormat.PrefixIndexMagic,
+            manifest.Counts.PrefixKeys,
+            candidates.Length);
+        var shapeEntries = ReadShapeEntries(
+            shards[DictionaryPackageFormat.ShapeIndexRole],
+            manifest.Counts.ShapeEntries);
+        var symbols = ReadSymbolEntries(
+            shards[DictionaryPackageFormat.SymbolsRole],
+            manifest.Counts.SymbolInputs);
+        return new CompiledImeDictionary(
+            candidates,
+            exactIndex,
+            prefixIndex,
+            shapeEntries,
+            symbols,
+            manifest.Parameters.InputScheme);
     }
 
     private static void ValidateManifest(DictionaryPackageManifest manifest)
@@ -81,7 +124,9 @@ public static class DictionaryPackageLoader
             throw new InvalidDataException(DictionaryResources.InvalidPackageKind);
         }
 
-        if ((!string.Equals(manifest.Parameters.InputScheme, DictionaryPackageFormat.FullPinyinInputScheme, StringComparison.Ordinal)
+        if ((!string.IsNullOrEmpty(manifest.CompilerVersion)
+                && !string.Equals(manifest.CompilerVersion, DictionaryPackageManifest.CurrentCompilerVersion, StringComparison.Ordinal))
+            || (!string.Equals(manifest.Parameters.InputScheme, DictionaryPackageFormat.FullPinyinInputScheme, StringComparison.Ordinal)
                 && !string.Equals(manifest.Parameters.InputScheme, DictionaryPackageFormat.XiaoheDoublePinyinInputScheme, StringComparison.Ordinal))
             || manifest.Parameters.MaxPrefixCandidatesPerKey <= 0
             || manifest.Parameters.MaxPrefixCandidatesPerKey > DictionaryPackageFormat.MaxCandidatesPerKey)

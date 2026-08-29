@@ -24,6 +24,7 @@ public static class ImeConstants
     public const uint SCSCapsCompStr = 0x00000001;
     public const uint SCSCapsMakeRead = 0x00000002;
     public const uint SCSCapsSetReconVert = 0x00000004;
+    public const uint ScsSetStr = GcsCompReadStr | GcsCompStr;
 
     public const uint SelectCapsConversion = 0x00000001;
     public const uint SelectCapsSentence = 0x00000002;
@@ -66,6 +67,31 @@ public static class ImeConstants
     public const uint ImnChangeCandidate = 0x0003;
     public const uint ImnCloseCandidate = 0x0004;
     public const uint ImnOpenCandidate = 0x0005;
+
+    public const uint GclConversion = 0x0001;
+    public const uint GclReverseConversion = 0x0002;
+    public const uint GclReverseLength = 0x0003;
+
+    public const uint ImeEscQuerySupport = 0x0003;
+    public const uint ImeEscImeName = 0x1006;
+    public const int ImeNameBufferLength = 64;
+
+    public const uint ImeConfigGeneral = 1;
+    public const uint ImeConfigRegisterWord = 2;
+    public const uint ImeConfigSelectDictionary = 3;
+
+    public const uint ImeRegWordStyleEudc = 0x00000001;
+    public const uint ImeRegWordStyleUserFirst = 0x80000000;
+    public const uint ImeRegWordStyleUserLast = 0xFFFFFFFF;
+    public const int StyleDescriptionBufferLength = 32;
+
+    public const uint NiSelectCandidateStr = 0x0012;
+    public const uint NiChangeCandidateList = 0x0013;
+    public const uint NiCompositionStr = 0x0015;
+    public const uint CpsComplete = 0x0001;
+    public const uint CpsConvert = 0x0002;
+    public const uint CpsRevert = 0x0003;
+    public const uint CpsCancel = 0x0004;
 
     public const ushort VkBack = 0x08;
     public const ushort VkTab = 0x09;

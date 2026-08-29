@@ -87,8 +87,44 @@ internal static class PhoneticInputProjection
         "ou",
     };
 
+    internal static string CanonicalizeReading(string reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+
+        var syllables = new List<string>();
+        foreach (var token in reading.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var normalizedToken = token.ToLowerInvariant()
+                .Replace("u:", "v", StringComparison.Ordinal)
+                .Replace('ü', 'v');
+            if (normalizedToken.Length == 0 || normalizedToken.Any(character => character is < 'a' or > 'z'))
+            {
+                continue;
+            }
+
+            if (TryEncodeXiaoheSyllable(normalizedToken, out _))
+            {
+                syllables.Add(normalizedToken);
+                continue;
+            }
+
+            if (TrySplitConcatenatedSyllables(normalizedToken, out var splitSyllables))
+            {
+                syllables.AddRange(splitSyllables);
+                continue;
+            }
+
+            syllables.Add(normalizedToken);
+        }
+
+        return string.Join(' ', syllables);
+    }
+
     internal static bool TryProjectReading(string reading, string inputScheme, out string lookupKey)
     {
+        ArgumentNullException.ThrowIfNull(reading);
+        ArgumentNullException.ThrowIfNull(inputScheme);
+
         if (string.Equals(inputScheme, DictionaryPackageFormat.FullPinyinInputScheme, StringComparison.Ordinal))
         {
             lookupKey = DictionaryPackageFormat.NormalizeLookupKey(reading);
@@ -101,8 +137,15 @@ internal static class PhoneticInputProjection
             return false;
         }
 
+        var syllables = reading.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (syllables.Length == 1 && !TryEncodeXiaoheSyllable(syllables[0], out _))
+        {
+            lookupKey = DictionaryPackageFormat.NormalizeLookupKey(syllables[0]);
+            return lookupKey.Length > 0;
+        }
+
         var encodedSyllables = new List<string>();
-        foreach (var syllable in reading.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var syllable in syllables)
         {
             if (!TryEncodeXiaoheSyllable(syllable, out var encodedSyllable))
             {
@@ -115,6 +158,38 @@ internal static class PhoneticInputProjection
 
         lookupKey = string.Concat(encodedSyllables);
         return lookupKey.Length > 0;
+    }
+
+    private static bool TrySplitConcatenatedSyllables(string token, out IReadOnlyList<string> syllables)
+    {
+        var parts = new List<string>();
+        var index = 0;
+        while (index < token.Length)
+        {
+            var matchedLength = 0;
+            var maxLength = Math.Min(6, token.Length - index);
+            for (var length = maxLength; length >= 1; length--)
+            {
+                var candidate = token.Substring(index, length);
+                if (TryEncodeXiaoheSyllable(candidate, out _))
+                {
+                    matchedLength = length;
+                    parts.Add(candidate);
+                    break;
+                }
+            }
+
+            if (matchedLength == 0)
+            {
+                syllables = [];
+                return false;
+            }
+
+            index += matchedLength;
+        }
+
+        syllables = parts;
+        return parts.Count > 1;
     }
 
     private static bool TryEncodeXiaoheSyllable(string syllable, out string code)

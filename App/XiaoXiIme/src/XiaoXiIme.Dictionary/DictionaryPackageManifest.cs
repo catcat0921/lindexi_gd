@@ -6,11 +6,15 @@ public sealed record DictionaryPackageManifest
 
     public const string ExpectedPackageKind = "XiaoXiImeDictionary";
 
+    public const string CurrentCompilerVersion = "1";
+
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
     public string PackageKind { get; init; } = ExpectedPackageKind;
 
     public string CreatedBy { get; init; } = string.Empty;
+
+    public string CompilerVersion { get; init; } = CurrentCompilerVersion;
 
     public IReadOnlyList<DictionaryPackageSource> Sources { get; init; } = [];
 
@@ -21,7 +25,7 @@ public sealed record DictionaryPackageManifest
     public DictionaryPackageCounts Counts { get; init; } = new();
 }
 
-public sealed record DictionaryPackageSource(string Path, long Length);
+public sealed record DictionaryPackageSource(string Path, long Length, long LastWriteTimeUtcTicks);
 
 public sealed record DictionaryPackageParameters
 {

@@ -10,7 +10,7 @@ XiaoXiIme 是一个基于 .NET 10 的小希输入法实验项目，用于探索 
 
 - 输入法核心：维护输入上下文、组合文本、候选词、按键处理结果等核心状态。
 - 词典服务：提供原生 TSV、离线二进制 package、全拼/小鹤双拼索引、形码、符号及用户学习，支撑内存候选查询。
-- Windows IME 模块：提供传统 IME 入口导出、按键翻译、上下文读写和与宿主进程通讯的桥接逻辑。
+- Windows IME 模块：提供传统 IME 入口导出、按键翻译、`ImeSetCompositionString` 整串替换、`ImeConversionList` 独立查询/`GCL_REVERSELENGTH` 反查长度、`ImeEscape` 名称查询、`ImeRegisterWord` 用户词注册、`ImeConfigure(IME_CONFIG_REGISTERWORD)` 配置注册、上下文读写和与宿主进程通讯的桥接逻辑。
 - 宿主进程：承载输入法运行时服务，通过 IPC 与 IME 模块交互。
 - IPC 协议：定义输入法模块与宿主进程之间的请求、响应和通知模型。
 - Avalonia UI：维护候选窗口状态映射和候选词展示控制逻辑。
@@ -101,7 +101,7 @@ dotnet publish src/XiaoXiIme.ImeModule/XiaoXiIme.ImeModule.csproj -c Release -r 
 持续推进方向：
 
 - 完善输入法核心状态机和候选词选择体验。
-- 完成正式词库转换、发布负载与目标 Windows 环境安装性能验证。
+- 完成正式词库转换后的管理员 VM 安装、真实按键提交和清理验证；`payload-build` 已在 Native AOT 前旁路编译并校验双 package，发布后再拷入最终 `app/host` 并二次校验，待人工放入原生 TSV 后继续。
 - 完善 IME 模块与 Windows 输入法系统的安装、注册和回滚工具链。
 - 完善候选窗口视觉表现、定位、交互和跨进程状态同步。
 - 扩展 IPC 协议的兼容性说明和异常处理能力。

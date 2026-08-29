@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using XiaoXiIme.Dictionary;
 
 namespace XiaoXiIme.Cli;
 
@@ -11,14 +12,28 @@ internal static class IntegrationPayloadBuilder
     public static async Task<int> BuildAsync(PayloadBuildOptions options, TextWriter output, TextWriter error)
     {
         var log = new StructuredConsole(output, error);
-        var stagingDirectory = options.NoBuild
-            ? FindPublishDirectory(AppContext.BaseDirectory, Environment.CurrentDirectory)
-            : Path.Combine(FindSolutionDirectory(AppContext.BaseDirectory), "artifacts", "integration-publish");
+        var stagingDirectory = ResolveStagingDirectory(options);
         var solutionDirectory = options.NoBuild ? null : FindSolutionDirectory(AppContext.BaseDirectory);
-        var dictionarySourceDirectory = options.NoBuild
-            ? FindDictionarySourceDirectory(stagingDirectory)
-            : Path.Combine(solutionDirectory!, "data", "dictionaries");
         var outputDirectory = Path.GetFullPath(options.Output ?? Path.Combine(stagingDirectory, "integration-payload"));
+        string dictionarySourceDirectory;
+        try
+        {
+            dictionarySourceDirectory = ResolveDictionarySourceDirectory(options, stagingDirectory, solutionDirectory);
+            DefaultDictionaryPackageBuilder.EnsureRequiredSources(dictionarySourceDirectory);
+        }
+        catch (Exception exception) when (exception is ArgumentException or DirectoryNotFoundException or InvalidOperationException)
+        {
+            log.Error("payload", exception.Message);
+            return 13;
+        }
+
+        var dictionaryStagingDirectory = GetDictionaryPackageStagingDirectory(stagingDirectory);
+        var dictionaryCompileError = CompileAndVerifyDictionaryPackages(dictionarySourceDirectory, dictionaryStagingDirectory);
+        if (dictionaryCompileError is not null)
+        {
+            log.Error("payload", dictionaryCompileError);
+            return 14;
+        }
 
         if (!options.NoBuild)
         {
@@ -33,10 +48,6 @@ internal static class IntegrationPayloadBuilder
                 }
             }
         }
-
-        DefaultDictionaryPackageBuilder.Build(
-            dictionarySourceDirectory,
-            Path.Combine(stagingDirectory, "app", "host"));
 
         var sources = CreateSources(stagingDirectory);
         var missing = sources.Where(source => !File.Exists(source.SourcePath)).Select(source => source.SourcePath).ToArray();
@@ -55,6 +66,13 @@ internal static class IntegrationPayloadBuilder
         foreach (var source in sources)
         {
             CopyDirectory(Path.GetDirectoryName(source.SourcePath)!, Path.Combine(outputDirectory, source.TargetDirectory));
+        }
+
+        var dictionaryPayloadError = CopyAndVerifyDictionaryPackages(dictionaryStagingDirectory, outputDirectory);
+        if (dictionaryPayloadError is not null)
+        {
+            log.Error("payload", dictionaryPayloadError);
+            return 14;
         }
 
         if (OperatingSystem.IsWindows())
@@ -91,6 +109,60 @@ internal static class IntegrationPayloadBuilder
         manifest.Save(manifestPath);
         log.Information("payload", "Integration payload created.", new { outputDirectory, manifestPath, fileCount = files.Length });
         return 0;
+    }
+
+    internal static string GetDictionaryPackageStagingDirectory(string stagingDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagingDirectory);
+        return Path.Combine(Path.GetFullPath(stagingDirectory), "dictionary-packages");
+    }
+
+    internal static string? CompileAndVerifyDictionaryPackages(string dictionarySourceDirectory, string dictionaryStagingDirectory)
+    {
+        try
+        {
+            DefaultDictionaryPackageBuilder.Build(dictionarySourceDirectory, dictionaryStagingDirectory);
+            return IntegrationTestRunner.VerifyHostDictionaryPackages(dictionaryStagingDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or DictionarySourceException or DictionaryPackageException)
+        {
+            return exception.Message;
+        }
+    }
+
+    internal static string? CopyAndVerifyDictionaryPackages(string dictionaryStagingDirectory, string payloadDirectory)
+    {
+        try
+        {
+            var hostOutputDirectory = Path.Combine(payloadDirectory, "app", "host");
+            Directory.CreateDirectory(hostOutputDirectory);
+            CopyPackageDirectory(
+                Path.Combine(dictionaryStagingDirectory, DictionaryPackageLocations.FullPinyinPackageDirectoryName),
+                Path.Combine(hostOutputDirectory, DictionaryPackageLocations.FullPinyinPackageDirectoryName));
+            CopyPackageDirectory(
+                Path.Combine(dictionaryStagingDirectory, DictionaryPackageLocations.XiaoheDoublePinyinPackageRelativePath),
+                Path.Combine(hostOutputDirectory, DictionaryPackageLocations.XiaoheDoublePinyinPackageRelativePath));
+            return IntegrationTestRunner.VerifyDictionaryPackages(payloadDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or DirectoryNotFoundException)
+        {
+            return exception.Message;
+        }
+    }
+
+    private static void CopyPackageDirectory(string sourceDirectory, string targetDirectory)
+    {
+        if (!Directory.Exists(sourceDirectory))
+        {
+            throw new DirectoryNotFoundException($"Compiled dictionary package was not found: {sourceDirectory}");
+        }
+
+        if (Directory.Exists(targetDirectory))
+        {
+            Directory.Delete(targetDirectory, true);
+        }
+
+        CopyDirectory(sourceDirectory, targetDirectory);
     }
 
     private static IReadOnlyList<BuildCommand> CreateBuildCommands(string solutionDirectory, string stagingDirectory)
@@ -207,29 +279,68 @@ internal static class IntegrationPayloadBuilder
         throw new DirectoryNotFoundException("Unable to locate the integration publish directory from the CLI or current directory.");
     }
 
-    private static string FindDictionarySourceDirectory(string stagingDirectory)
+    internal static string ResolveStagingDirectory(PayloadBuildOptions options)
     {
-        var directory = new DirectoryInfo(stagingDirectory);
-        while (directory is not null)
+        ArgumentNullException.ThrowIfNull(options);
+        if (!string.IsNullOrWhiteSpace(options.StagingDirectory))
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, "phonetic"))
-                && Directory.Exists(Path.Combine(directory.FullName, "shape"))
-                && Directory.Exists(Path.Combine(directory.FullName, "symbols")))
-            {
-                return directory.FullName;
-            }
-            var repositoryLayout = Path.Combine(directory.FullName, "data", "dictionaries");
-            if (Directory.Exists(repositoryLayout))
-            {
-                return repositoryLayout;
-            }
-            var dataRootLayout = Path.Combine(directory.FullName, "dictionaries");
-            if (Directory.Exists(dataRootLayout))
-            {
-                return dataRootLayout;
-            }
-            directory = directory.Parent;
+            return Path.GetFullPath(options.StagingDirectory);
         }
+
+        return options.NoBuild
+            ? FindPublishDirectory(AppContext.BaseDirectory, Environment.CurrentDirectory)
+            : Path.Combine(FindSolutionDirectory(AppContext.BaseDirectory), "artifacts", "integration-publish");
+    }
+
+    internal static string ResolveDictionarySourceDirectory(
+        PayloadBuildOptions options,
+        string stagingDirectory,
+        string? solutionDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (!string.IsNullOrWhiteSpace(options.DictionarySource))
+        {
+            return Path.GetFullPath(options.DictionarySource);
+        }
+
+        return options.NoBuild
+            ? FindDictionarySourceDirectory(stagingDirectory)
+            : Path.Combine(solutionDirectory ?? throw new InvalidOperationException("A solution directory is required to locate data/dictionaries."), "data", "dictionaries");
+    }
+
+    internal static string FindDictionarySourceDirectory(params string[] startDirectories)
+    {
+        foreach (var startDirectory in startDirectories.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var directory = new DirectoryInfo(startDirectory);
+            while (directory is not null)
+            {
+                var phoneticLayout = Path.Combine(directory.FullName, "phonetic");
+                var shapeLayout = Path.Combine(directory.FullName, "shape");
+                var symbolsLayout = Path.Combine(directory.FullName, "symbols");
+                if (Directory.Exists(phoneticLayout)
+                    && Directory.Exists(shapeLayout)
+                    && Directory.Exists(symbolsLayout))
+                {
+                    return directory.FullName;
+                }
+
+                var repositoryLayout = Path.Combine(directory.FullName, "data", "dictionaries");
+                if (Directory.Exists(repositoryLayout))
+                {
+                    return repositoryLayout;
+                }
+
+                var dataRootLayout = Path.Combine(directory.FullName, "dictionaries");
+                if (Directory.Exists(dataRootLayout))
+                {
+                    return dataRootLayout;
+                }
+
+                directory = directory.Parent;
+            }
+        }
+
         throw new DirectoryNotFoundException("Unable to locate the dictionary source directory.");
     }
 

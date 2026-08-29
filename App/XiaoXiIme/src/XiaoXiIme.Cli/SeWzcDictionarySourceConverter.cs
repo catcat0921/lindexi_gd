@@ -7,6 +7,7 @@ namespace XiaoXiIme.Cli;
 internal static class SeWzcDictionarySourceConverter
 {
     internal const string PhoneticOutputRelativePath = "phonetic/sewzc-default.phonetic.tsv";
+    internal const string ProjectTermsOutputRelativePath = XiaoXiImeProjectTerms.OutputRelativePath;
     internal const string ShapeOutputRelativePath = "shape/sewzc-moqi.shape.tsv";
     internal const string SymbolOutputRelativePath = "symbols/sewzc-default.symbols.tsv";
 
@@ -31,6 +32,7 @@ internal static class SeWzcDictionarySourceConverter
         }
 
         var sourceRoot = Path.GetFullPath(sourceDirectory);
+        RejectRepositoryRelativeSnapshot(sourceRoot);
         var targetRoot = Path.GetFullPath(targetDirectory);
         if (!Directory.Exists(sourceRoot))
         {
@@ -41,20 +43,24 @@ internal static class SeWzcDictionarySourceConverter
         try
         {
             var phoneticOutput = Path.Combine(stagingRoot, PhoneticOutputRelativePath);
+            var projectTermsOutput = Path.Combine(stagingRoot, ProjectTermsOutputRelativePath);
             var shapeOutput = Path.Combine(stagingRoot, ShapeOutputRelativePath);
             var symbolOutput = Path.Combine(stagingRoot, SymbolOutputRelativePath);
 
             WritePhoneticSource(sourceRoot, phoneticOutput);
+            XiaoXiImeProjectTerms.WriteTo(projectTermsOutput);
             WriteShapeSource(RequiredSource(sourceRoot, "shape/moqi_chaifen.txt"), shapeOutput);
             WriteSymbolSource(RequiredSource(sourceRoot, "symbols/default.symbols.tsv"), symbolOutput);
 
             ValidateOutput(phoneticOutput, PhoneticDictionarySourceParser.Parse);
+            ValidateOutput(projectTermsOutput, PhoneticDictionarySourceParser.Parse);
             ValidateOutput(shapeOutput, ShapeDictionarySourceParser.Parse);
             ValidateOutput(symbolOutput, SymbolDictionarySourceParser.Parse);
 
             InstallOutputs(
                 targetRoot,
                 (phoneticOutput, PhoneticOutputRelativePath),
+                (projectTermsOutput, ProjectTermsOutputRelativePath),
                 (shapeOutput, ShapeOutputRelativePath),
                 (symbolOutput, SymbolOutputRelativePath));
         }
@@ -102,7 +108,7 @@ internal static class SeWzcDictionarySourceConverter
 
                 writer.Write(columns[0]);
                 writer.Write('\t');
-                writer.Write(columns[1]);
+                writer.Write(PhoneticDictionarySourceParser.CanonicalizeReading(columns[1]));
                 writer.Write('\t');
                 writer.WriteLine(frequency.Value.ToString(CultureInfo.InvariantCulture));
             }
@@ -186,6 +192,22 @@ internal static class SeWzcDictionarySourceConverter
         }
 
         return path;
+    }
+
+    private static void RejectRepositoryRelativeSnapshot(string sourceRoot)
+    {
+        var current = new DirectoryInfo(sourceRoot);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "ImeLab.slnx"))
+                && Directory.Exists(Path.Combine(current.FullName, "src", "Ime.RimeShim.NativeAot")))
+            {
+                throw new InvalidOperationException(
+                    "dictionary-convert-sewzc does not accept a SeWZC_IME repository path. Copy data/dictionaries to a decoupled snapshot first.");
+            }
+
+            current = current.Parent;
+        }
     }
 
     private static void InstallOutputs(string targetRoot, params (string SourcePath, string RelativePath)[] outputs)

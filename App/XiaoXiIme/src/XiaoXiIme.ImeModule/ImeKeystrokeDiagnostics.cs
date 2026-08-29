@@ -7,7 +7,7 @@ namespace XiaoXiIme.ImeModule;
 [StructLayout(LayoutKind.Sequential)]
 public struct ImeKeystrokeDiagnosticSnapshot
 {
-    public const uint CurrentVersion = 2;
+    public const uint CurrentVersion = 4;
 
     public uint Version;
     public uint ImeInquireCallCount;
@@ -23,6 +23,11 @@ public struct ImeKeystrokeDiagnosticSnapshot
     public uint LastCompositionWriteSucceeded;
     public uint LastMessageCount;
     public uint LastReturnValue;
+    public uint ProcessKeyHandledCount;
+    public uint ToAsciiHandledCount;
+    public uint LastProcessError;
+    public uint LastToAsciiError;
+    public uint LastToAsciiStage;
 }
 
 public static unsafe class ImeKeystrokeDiagnostics
@@ -40,6 +45,11 @@ public static unsafe class ImeKeystrokeDiagnostics
     private static int s_lastCompositionWriteSucceeded;
     private static int s_lastMessageCount;
     private static int s_lastReturnValue;
+    private static int s_processKeyHandledCount;
+    private static int s_toAsciiHandledCount;
+    private static int s_lastProcessError;
+    private static int s_lastToAsciiError;
+    private static int s_lastToAsciiStage;
 
     [UnmanagedCallersOnly(EntryPoint = "XiaoXiImeResetKeystrokeDiagnostics", CallConvs = [typeof(CallConvStdcall)])]
     public static void ResetExport()
@@ -67,21 +77,34 @@ public static unsafe class ImeKeystrokeDiagnostics
 
     internal static void RecordNotifyIme() => Interlocked.Increment(ref s_notifyImeCallCount);
 
-    internal static void RecordImeProcessKey(uint virtualKey, bool handled)
+    internal static void RecordImeProcessKey(uint virtualKey, bool handled, uint error = 0)
     {
         Interlocked.Increment(ref s_imeProcessKeyCallCount);
+        if (handled)
+        {
+            Interlocked.Increment(ref s_processKeyHandledCount);
+        }
+
         Volatile.Write(ref s_lastProcessVirtualKey, unchecked((int)virtualKey));
         Volatile.Write(ref s_lastProcessHandled, handled ? 1 : 0);
+        Volatile.Write(ref s_lastProcessError, unchecked((int)error));
     }
 
-    internal static void RecordImeToAsciiEx(uint virtualKey, bool handled, bool compositionWriteSucceeded, uint messageCount, uint returnValue)
+    internal static void RecordImeToAsciiEx(uint virtualKey, bool handled, bool compositionWriteSucceeded, uint messageCount, uint returnValue, uint error = 0, uint stage = 0)
     {
         Interlocked.Increment(ref s_imeToAsciiExCallCount);
+        if (handled)
+        {
+            Interlocked.Increment(ref s_toAsciiHandledCount);
+        }
+
         Volatile.Write(ref s_lastToAsciiVirtualKey, unchecked((int)virtualKey));
         Volatile.Write(ref s_lastToAsciiHandled, handled ? 1 : 0);
         Volatile.Write(ref s_lastCompositionWriteSucceeded, compositionWriteSucceeded ? 1 : 0);
         Volatile.Write(ref s_lastMessageCount, unchecked((int)messageCount));
         Volatile.Write(ref s_lastReturnValue, unchecked((int)returnValue));
+        Volatile.Write(ref s_lastToAsciiError, unchecked((int)error));
+        Volatile.Write(ref s_lastToAsciiStage, unchecked((int)stage));
     }
 
     internal static void Reset()
@@ -99,6 +122,11 @@ public static unsafe class ImeKeystrokeDiagnostics
         Volatile.Write(ref s_lastCompositionWriteSucceeded, 0);
         Volatile.Write(ref s_lastMessageCount, 0);
         Volatile.Write(ref s_lastReturnValue, 0);
+        Volatile.Write(ref s_processKeyHandledCount, 0);
+        Volatile.Write(ref s_toAsciiHandledCount, 0);
+        Volatile.Write(ref s_lastProcessError, 0);
+        Volatile.Write(ref s_lastToAsciiError, 0);
+        Volatile.Write(ref s_lastToAsciiStage, 0);
     }
 
     internal static ImeKeystrokeDiagnosticSnapshot GetSnapshot()
@@ -119,6 +147,11 @@ public static unsafe class ImeKeystrokeDiagnostics
             LastCompositionWriteSucceeded = unchecked((uint)Volatile.Read(ref s_lastCompositionWriteSucceeded)),
             LastMessageCount = unchecked((uint)Volatile.Read(ref s_lastMessageCount)),
             LastReturnValue = unchecked((uint)Volatile.Read(ref s_lastReturnValue)),
+            ProcessKeyHandledCount = unchecked((uint)Volatile.Read(ref s_processKeyHandledCount)),
+            ToAsciiHandledCount = unchecked((uint)Volatile.Read(ref s_toAsciiHandledCount)),
+            LastProcessError = unchecked((uint)Volatile.Read(ref s_lastProcessError)),
+            LastToAsciiError = unchecked((uint)Volatile.Read(ref s_lastToAsciiError)),
+            LastToAsciiStage = unchecked((uint)Volatile.Read(ref s_lastToAsciiStage)),
         };
     }
 }

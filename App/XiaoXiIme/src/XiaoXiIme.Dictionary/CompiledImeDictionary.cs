@@ -13,26 +13,41 @@ public sealed class CompiledImeDictionary : IImeDictionary, IShapeDictionary, IS
     private readonly ShapeDictionaryEntry[] _shapeEntries;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<ImeCandidate>> _symbols;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _shapeCodesByText;
+    private readonly IReadOnlyDictionary<string, int[]> _textIndex;
 
     internal CompiledImeDictionary(
         ImeCandidate[] candidates,
         IReadOnlyDictionary<string, int[]> exactIndex,
         IReadOnlyDictionary<string, int[]> prefixIndex,
         ShapeDictionaryEntry[] shapeEntries,
-        IReadOnlyDictionary<string, IReadOnlyList<ImeCandidate>> symbols)
+        IReadOnlyDictionary<string, IReadOnlyList<ImeCandidate>> symbols,
+        string inputScheme)
     {
         _candidates = candidates;
         _exactIndex = exactIndex;
         _prefixIndex = prefixIndex;
         _shapeEntries = shapeEntries;
         _symbols = symbols;
+        InputScheme = inputScheme;
         _shapeCodesByText = shapeEntries
             .GroupBy(entry => entry.Text, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyList<string>)group.Select(entry => entry.ShapeCode).ToArray(),
                 StringComparer.Ordinal);
+        _textIndex = candidates
+            .Select((candidate, index) => (candidate.Text, index))
+            .GroupBy(entry => entry.Text, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(entry => entry.index).ToArray(),
+                StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Gets the encoding space recorded by the compiled package.
+    /// </summary>
+    public string InputScheme { get; }
 
     /// <inheritdoc />
     public IReadOnlyList<ImeCandidate> Query(ImeDictionaryQuery query)
@@ -44,15 +59,44 @@ public sealed class CompiledImeDictionary : IImeDictionary, IShapeDictionary, IS
         }
 
         var input = DictionaryPackageFormat.NormalizeLookupKey(query.Input);
-        var result = new List<ImeCandidate>(Math.Min(query.MaxCount, 32));
+        var ranked = new List<DictionaryCandidate>(Math.Min(query.MaxCount, 32));
         var seen = new HashSet<int>();
-        AddCandidates(_exactIndex, input, query.MaxCount, result, seen);
-        if (query.MatchMode == ImeDictionaryMatchMode.ExactAndPrefix && result.Count < query.MaxCount)
+        AddCandidates(_exactIndex, input, DictionaryCandidateMatchKind.Exact, ranked, seen);
+        if (query.MatchMode == ImeDictionaryMatchMode.ExactAndPrefix)
         {
-            AddCandidates(_prefixIndex, input, query.MaxCount, result, seen);
+            AddCandidates(_prefixIndex, input, DictionaryCandidateMatchKind.Prefix, ranked, seen);
         }
 
-        return result;
+        return DictionaryCandidateRanking.Rank(ranked, query.MaxCount);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ImeCandidate> QueryByText(string text, int maxCount = 9)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (string.IsNullOrWhiteSpace(text) || maxCount <= 0)
+        {
+            return [];
+        }
+
+        if (!_textIndex.TryGetValue(text, out var candidateIds))
+        {
+            return [];
+        }
+
+        var ranked = new List<DictionaryCandidate>(candidateIds.Length);
+        foreach (var candidateId in candidateIds)
+        {
+            var candidate = _candidates[candidateId];
+            ranked.Add(new DictionaryCandidate(
+                candidate.Text,
+                candidate.Reading,
+                candidate.Score,
+                DictionaryCandidateSourceKind.System,
+                DictionaryCandidateMatchKind.Exact));
+        }
+
+        return DictionaryCandidateRanking.RankReadings(ranked, maxCount);
     }
 
     /// <inheritdoc />
@@ -107,8 +151,8 @@ public sealed class CompiledImeDictionary : IImeDictionary, IShapeDictionary, IS
     private void AddCandidates(
         IReadOnlyDictionary<string, int[]> index,
         string input,
-        int maxCount,
-        List<ImeCandidate> result,
+        DictionaryCandidateMatchKind matchKind,
+        List<DictionaryCandidate> result,
         HashSet<int> seen)
     {
         if (!index.TryGetValue(input, out var candidateIds))
@@ -118,14 +162,18 @@ public sealed class CompiledImeDictionary : IImeDictionary, IShapeDictionary, IS
 
         foreach (var candidateId in candidateIds)
         {
-            if (seen.Add(candidateId))
+            if (!seen.Add(candidateId))
             {
-                result.Add(_candidates[candidateId]);
-                if (result.Count == maxCount)
-                {
-                    return;
-                }
+                continue;
             }
+
+            var candidate = _candidates[candidateId];
+            result.Add(new DictionaryCandidate(
+                candidate.Text,
+                candidate.Reading,
+                candidate.Score,
+                DictionaryCandidateSourceKind.System,
+                matchKind));
         }
     }
 }

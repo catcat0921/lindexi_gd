@@ -25,6 +25,34 @@ public class DictionaryPackageTests
     }
 
     [Fact]
+    public void CompileAndLoad_WhenConcatenatedReadingIsCanonicalizedThenXiaoheQueryMatches()
+    {
+        using var reader = new StringReader("均订\tjunding\t50");
+        var entries = PhoneticDictionarySourceParser.Parse(reader, "core.phonetic.tsv");
+        var packagePath = CreatePackage(entries, new DictionaryPackageParameters { InputScheme = "xiaoheDoublePinyin" });
+        var dictionary = DictionaryPackageLoader.Load(packagePath);
+
+        var candidates = dictionary.Query(new ImeDictionaryQuery("jydk"));
+
+        Assert.Equal("均订", Assert.Single(candidates).Text);
+        Assert.Equal("jun ding", candidates[0].Reading);
+    }
+
+    [Fact]
+    public void CompileAndLoad_WhenSingleTokenAbbreviationCannotBeProjectedThenUsesRawLookupKey()
+    {
+        var packagePath = CreatePackage(
+            [new PhoneticDictionaryEntry("小希", "xx", 100)],
+            new DictionaryPackageParameters { InputScheme = "xiaoheDoublePinyin" });
+        var dictionary = DictionaryPackageLoader.Load(packagePath);
+
+        var candidates = dictionary.Query(new ImeDictionaryQuery("xx"));
+
+        Assert.Equal("小希", Assert.Single(candidates).Text);
+        Assert.Equal("xx", candidates[0].Reading);
+    }
+
+    [Fact]
     public void CompileAndLoad_WhenPhraseReadingContainsSyllableSpacesThenContinuousInputMatchesExactly()
     {
         var packagePath = CreatePackage(
@@ -73,6 +101,18 @@ public class DictionaryPackageTests
     }
 
     [Fact]
+    public void CompileAndLoad_WhenQueryByTextThenReturnsCanonicalReading()
+    {
+        var packagePath = CreatePackage(XiaoXiImeProjectTerms.Parse());
+        var dictionary = DictionaryPackageLoader.Load(packagePath);
+
+        var candidates = dictionary.QueryByText("XiaoXiIme");
+
+        Assert.Equal("xiao xi ai mu yi", Assert.Single(candidates).Reading);
+        Assert.Equal("XiaoXiIme", candidates[0].Text);
+    }
+
+    [Fact]
     public void Compile_WhenXiaoheDoublePinyinThenManifestRecordsInputSchemeAndCandidateKeepsFullPinyinReading()
     {
         var packagePath = CreatePackage(
@@ -84,6 +124,7 @@ public class DictionaryPackageTests
         var dictionary = DictionaryPackageLoader.Load(packagePath);
 
         Assert.Equal("xiaoheDoublePinyin", manifest!.Parameters.InputScheme);
+        Assert.Equal("xiaoheDoublePinyin", dictionary.InputScheme);
         Assert.Equal("ni hao", Assert.Single(dictionary.Query(new ImeDictionaryQuery("nihc"))).Reading);
     }
 
@@ -111,11 +152,11 @@ public class DictionaryPackageTests
         var path = Path.Combine(Path.GetTempPath(), "XiaoXiIme.Dictionary.Tests", Guid.NewGuid().ToString("N"));
 
         var exception = Assert.Throws<ArgumentException>(() => DictionaryPackageCompiler.Compile(
-            [new PhoneticDictionaryEntry("嗯", "ng", 100)],
+            [new PhoneticDictionaryEntry("嗯好", "ng hao", 100)],
             path,
             new DictionaryPackageParameters { InputScheme = "xiaoheDoublePinyin" }));
 
-        Assert.Contains("'ng'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("'ng hao'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("'xiaoheDoublePinyin'", exception.Message, StringComparison.Ordinal);
     }
 
@@ -135,6 +176,29 @@ public class DictionaryPackageTests
     {
         var packagePath = CreatePackage([new PhoneticDictionaryEntry("你", "ni", 100)]);
         UpdateManifest(packagePath, root => root["parameters"]!["inputScheme"] = "unsupported");
+
+        Assert.Throws<DictionaryPackageException>(() => DictionaryPackageLoader.Load(packagePath));
+    }
+
+    [Fact]
+    public void Inspect_WhenPackageIsValidThenReturnsManifestWithoutKeepingFilesOpen()
+    {
+        var packagePath = CreatePackage([new PhoneticDictionaryEntry("你", "ni", 100)]);
+
+        var inspection = DictionaryPackageLoader.Inspect(packagePath);
+
+        Assert.Equal("XiaoXiImeDictionary", inspection.Manifest.PackageKind);
+        Assert.Equal(DictionaryPackageManifest.CurrentCompilerVersion, inspection.Manifest.CompilerVersion);
+        Assert.Equal(1, inspection.Manifest.Counts.Candidates);
+        File.Delete(Path.Combine(packagePath, "candidates.bin"));
+        Assert.Throws<DictionaryPackageException>(() => DictionaryPackageLoader.Load(packagePath));
+    }
+
+    [Fact]
+    public void Load_WhenCompilerVersionIsUnsupportedThenRejectsPackage()
+    {
+        var packagePath = CreatePackage([new PhoneticDictionaryEntry("你", "ni", 100)]);
+        UpdateManifest(packagePath, root => root["compilerVersion"] = "unsupported");
 
         Assert.Throws<DictionaryPackageException>(() => DictionaryPackageLoader.Load(packagePath));
     }
@@ -187,6 +251,26 @@ public class DictionaryPackageTests
         var second = ReadShardBytes(secondPath);
 
         Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void CompileAndLoad_WhenPrefixCandidatesShareFrequencyThenOrdersByLookupLengthThenText()
+    {
+        var packagePath = CreatePackage(
+        [
+            new PhoneticDictionaryEntry("你们", "ni men", 80),
+            new PhoneticDictionaryEntry("你好", "ni hao", 80),
+            new PhoneticDictionaryEntry("泥", "ni", 80),
+        ]);
+        var dictionary = DictionaryPackageLoader.Load(packagePath);
+
+        var candidates = dictionary.Query(new ImeDictionaryQuery("ni", MatchMode: ImeDictionaryMatchMode.ExactAndPrefix));
+
+        Assert.Collection(
+            candidates,
+            candidate => Assert.Equal("泥", candidate.Text),
+            candidate => Assert.Equal("你们", candidate.Text),
+            candidate => Assert.Equal("你好", candidate.Text));
     }
 
     [Fact]

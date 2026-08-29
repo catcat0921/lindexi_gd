@@ -36,9 +36,6 @@ public class DefaultDictionaryPackageBuilderTests
     {
         var root = CreateRoot();
         var sourceDirectory = CreateSources(root);
-        File.AppendAllText(
-            Path.Combine(sourceDirectory, "phonetic", "project-terms.phonetic.tsv"),
-            "IME\tai mu yi\t1000");
         var hostOutputDirectory = Path.Combine(root, "host");
 
         DefaultDictionaryPackageBuilder.Build(sourceDirectory, hostOutputDirectory);
@@ -47,6 +44,9 @@ public class DefaultDictionaryPackageBuilderTests
         var xiaohe = DictionaryPackageLoader.Load(Path.Combine(hostOutputDirectory, DefaultDictionaryPackageBuilder.XiaoheDoublePinyinPackageRelativePath));
         Assert.Equal("IME", Assert.Single(fullPinyin.Query(new ImeDictionaryQuery("aimuyi"))).Text);
         Assert.Equal("IME", Assert.Single(xiaohe.Query(new ImeDictionaryQuery("aimuyi"))).Text);
+        Assert.Equal("XiaoXiIme", Assert.Single(fullPinyin.Query(new ImeDictionaryQuery("xiaoxiaimuyi"))).Text);
+        Assert.Equal("XiaoXiIme", Assert.Single(xiaohe.Query(new ImeDictionaryQuery("xnxiaimuyi"))).Text);
+        Assert.Empty(xiaohe.Query(new ImeDictionaryQuery("xiaoxiaimuyi")));
     }
 
     [Fact]
@@ -58,6 +58,20 @@ public class DefaultDictionaryPackageBuilderTests
         var hostOutputDirectory = Path.Combine(root, "host");
 
         Assert.Throws<InvalidOperationException>(() => DefaultDictionaryPackageBuilder.Build(sourceDirectory, hostOutputDirectory));
+        Assert.False(Directory.Exists(Path.Combine(hostOutputDirectory, DefaultDictionaryPackageBuilder.FullPinyinPackageDirectoryName)));
+    }
+
+    [Fact]
+    public void EnsureRequiredSources_WhenRequiredTsvIsMissingThenReportsConvertCommand()
+    {
+        var root = CreateRoot();
+        var sourceDirectory = Path.Combine(root, "sources");
+        Directory.CreateDirectory(sourceDirectory);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => DefaultDictionaryPackageBuilder.EnsureRequiredSources(sourceDirectory));
+
+        Assert.Contains("dictionary-convert-sewzc", exception.Message);
     }
 
     private static string CreateSources(string root)
@@ -67,6 +81,7 @@ public class DefaultDictionaryPackageBuilderTests
         Directory.CreateDirectory(Path.Combine(sourceDirectory, "shape"));
         Directory.CreateDirectory(Path.Combine(sourceDirectory, "symbols"));
         File.WriteAllText(Path.Combine(sourceDirectory, "phonetic", "sewzc-default.phonetic.tsv"), "你好\tni hao\t100");
+        XiaoXiImeProjectTerms.WriteTo(Path.Combine(sourceDirectory, XiaoXiImeProjectTerms.OutputRelativePath));
         File.WriteAllText(Path.Combine(sourceDirectory, "shape", "sewzc-moqi.shape.tsv"), "你\trb\t亻尔");
         File.WriteAllText(Path.Combine(sourceDirectory, "symbols", "sewzc-default.symbols.tsv"), "/xh\t★\t☆");
         return sourceDirectory;

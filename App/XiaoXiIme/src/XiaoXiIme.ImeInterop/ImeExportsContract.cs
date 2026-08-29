@@ -5,6 +5,8 @@ public static class ImeExportsContract
     public const string ModuleFileExtension = ".ime";
     public const int ImeUiClassBufferLength = 16;
     public const string ImeUiClassName = "XiaoXiImeUIWnd";
+    public const string ImeDisplayName = "XiaoXi IME";
+    public const string UserWordStyleDescription = "User";
 
     public static ImeInquireInfo CreateDefaultInquireInfo()
     {

@@ -12,6 +12,24 @@ public static class PhoneticDictionarySourceParser
     public const int MaxReadingLength = 512;
 
     /// <summary>
+    /// Canonicalizes a phonetic reading into lowercase syllables separated by a single space.
+    /// Concatenated pinyin tokens are split when they can be uniquely encoded as syllables.
+    /// </summary>
+    public static string CanonicalizeReading(string reading)
+    {
+        return PhoneticInputProjection.CanonicalizeReading(reading);
+    }
+
+    /// <summary>
+    /// Normalizes a phonetic reading into a lowercase lookup key without whitespace.
+    /// </summary>
+    public static string NormalizeLookupKey(string reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        return DictionaryPackageFormat.NormalizeLookupKey(reading);
+    }
+
+    /// <summary>
     /// Parses, normalizes, merges, and deterministically sorts phonetic source entries.
     /// </summary>
     public static IReadOnlyList<PhoneticDictionaryEntry> Parse(TextReader reader, string filePath)
@@ -58,7 +76,7 @@ public static class PhoneticDictionarySourceParser
                 throw CreateException(filePath, lineNumber, DictionaryResources.TextTooLong);
             }
 
-            var reading = NormalizeReading(columns[1]);
+            var reading = CanonicalizeReading(columns[1]);
             if (reading.Length == 0)
             {
                 throw CreateException(filePath, lineNumber, DictionaryResources.EmptyReading);
@@ -92,15 +110,6 @@ public static class PhoneticDictionarySourceParser
             .ThenByDescending(entry => entry.Frequency)
             .ThenBy(entry => entry.Text, StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private static string NormalizeReading(string reading)
-    {
-        return string.Join(
-            ' ',
-            reading
-                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                .Select(syllable => syllable.ToLowerInvariant()));
     }
 
     private static bool IsValidReading(string reading)

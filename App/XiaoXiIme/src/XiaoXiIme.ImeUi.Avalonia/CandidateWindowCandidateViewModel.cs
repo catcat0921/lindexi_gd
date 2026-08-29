@@ -7,9 +7,9 @@ public sealed record CandidateWindowCandidateViewModel(
     string Reading,
     bool IsSelected)
 {
-    public string Background => IsSelected ? "#2563EB" : "#00FFFFFF";
+    public string Background => IsSelected ? "#DCEAFF" : "#00FFFFFF";
 
-    public string Foreground => IsSelected ? "#FFFFFFFF" : "#FF111827";
+    public string Foreground => IsSelected ? "#1557B0" : "#202124";
 
-    public string SecondaryForeground => IsSelected ? "#FFDCE7FF" : "#FF6B7280";
+    public string IndexForeground => IsSelected ? "#1557B0" : "#666666";
 }

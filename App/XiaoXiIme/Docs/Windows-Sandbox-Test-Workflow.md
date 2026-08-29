@@ -32,7 +32,7 @@
 - 入口文件必须随目录一起上传；
 - 不能直接把 `dotnet run ...` 作为任意命令字符串交给沙箱执行。
 
-因此需要一个仓库内的 AppHost，例如未来可正式建立：
+因此需要一个仓库内的 AppHost。现已提供：
 
 ```text
 tests/XiaoXiIme.SandboxRunner/
@@ -51,8 +51,8 @@ SandboxRunner.exe
     ↓ ProcessStartInfo("dotnet")
 dotnet build / dotnet test / dotnet run
     ↓
-sandbox-results/
-    ↓ 拉回
+sandbox-output/
+    ↓ 只拉回该目录
 工作区 artifacts/sandbox-results/
 ```
 
@@ -74,7 +74,7 @@ sandbox-results/
 推荐的结果目录结构：
 
 ```text
-sandbox-results/
+sandbox-output/
 ├── result.json
 ├── stdout.txt
 ├── stderr.txt
@@ -82,6 +82,8 @@ sandbox-results/
 │   └── *.trx
 └── logs/
 ```
+
+不要把结果写进 `artifacts/sandbox-results`。该路径既是本地拉回目录，也容易和推送到沙箱的仓库内容重叠；整仓拉回时会把源码嵌进结果目录，掩盖 `result.json`、TRX 和退出码。启动器应写入仓库根目录下的 `sandbox-output`，沙箱执行接口只拉回该目录。
 
 `result.json` 至少应记录：
 
@@ -256,9 +258,9 @@ win-x64
 启动器应在启动子进程前创建固定结果目录，并且无论成功、失败还是超时，都至少写入：
 
 ```text
-sandbox-results/result.json
-sandbox-results/stdout.txt
-sandbox-results/stderr.txt
+sandbox-output/result.json
+sandbox-output/stdout.txt
+sandbox-output/stderr.txt
 ```
 
 不要只在所有步骤成功后才创建结果目录。
@@ -283,7 +285,7 @@ sandbox-results/stderr.txt
 
 ## 后续优化建议
 
-建议正式增加 `XiaoXiIme.SandboxRunner`，提供以下操作：
+`XiaoXiIme.SandboxRunner` 现已作为托管验证入口存在。默认逐个运行 Dictionary、CLI、ImeCore、ImeIpc、ImeModule 和 IntegrationTests，解析 TRX 计数，并将 JSON/stdout/stderr/TRX 写入仓库根目录下的 `sandbox-output`，避免一次构建整个解决方案带入 Native AOT 项目，也避免结果目录与本地 `artifacts/sandbox-results` 拉回路径重叠。扩展操作仍可按以下方向增加：
 
 ```text
 XiaoXiIme.SandboxRunner.exe build

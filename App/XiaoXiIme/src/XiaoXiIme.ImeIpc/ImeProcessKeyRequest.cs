@@ -1,4 +1,4 @@
-﻿using XiaoXiIme.Foundation;
+using XiaoXiIme.Foundation;
 
 namespace XiaoXiIme.ImeIpc;
 
@@ -8,7 +8,5 @@ public sealed record ImeProcessKeyRequest(
     long Generation = 0,
     long SequenceNumber = 0)
 {
-    public ImeSessionId EffectiveSessionId => string.IsNullOrWhiteSpace(SessionId.Value)
-        ? ImeSessionId.Default
-        : SessionId;
+    public ImeSessionId EffectiveSessionId => SessionId.Effective;
 }
