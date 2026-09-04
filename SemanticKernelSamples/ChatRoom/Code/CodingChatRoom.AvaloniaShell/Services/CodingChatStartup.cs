@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-
 using AgentLib;
 using AgentLib.Coding;
 using AgentLib.Coding.Images;
@@ -10,7 +9,6 @@ using AgentLib.Coding.Sandboxes;
 using AgentLib.Core;
 using AgentLib.Core.AgentApiManagers.LanguageModelProviders;
 using AgentLib.Logging;
-
 using CodingChatRoom.AvaloniaShell.Infrastructure;
 
 namespace CodingChatRoom.AvaloniaShell.Services;
@@ -33,9 +31,11 @@ internal static class CodingChatStartup
         paths.ConfigurationFile.Refresh();
         if (!paths.ConfigurationFile.Exists)
         {
-            throw new FileNotFoundException(
+            throw new FileNotFoundException
+            (
                 $"未找到 CodingChatRoom 模型配置文件：{paths.ConfigurationFile.FullName}",
-                paths.ConfigurationFile.FullName);
+                paths.ConfigurationFile.FullName
+            );
         }
 
         AgentApiManagerConfiguration configuration = await AgentApiManagerConfiguration
@@ -52,38 +52,53 @@ internal static class CodingChatStartup
             AgentApiEndpointManager = endpointManager,
             MainThreadDispatcher = mainThreadDispatcher,
         };
-        CodingChatShellSettings shellSettings = await new CodingChatSettingsService(paths)
+        var windowsSandboxToolSource = new WindowsSandboxToolSource
+        (
+            isEnabled: false,
+            winRemoteShellPath: string.Empty,
+            serverAddress: string.Empty
+        );
+        var settingsService = new CodingChatSettingsService(paths, windowsSandboxToolSource);
+        CodingChatShellSettings shellSettings = await settingsService
             .LoadShellSettingsAsync()
             .ConfigureAwait(false);
+        windowsSandboxToolSource.UpdateConfiguration
+        (
+            shellSettings.IsWindowsSandboxEnabled,
+            shellSettings.WindowsSandboxToolPath,
+            shellSettings.WindowsSandboxServerAddress
+        );
         var additionalToolSources = new List<ICodingWorkspaceToolSource>
         {
             new CodingImageAnalysisToolSource(chatManager),
+            windowsSandboxToolSource,
         };
-        if (shellSettings.IsWindowsSandboxEnabled)
-        {
-            additionalToolSources.Add(new WindowsSandboxToolSource(
-                shellSettings.WindowsSandboxToolPath,
-                shellSettings.WindowsSandboxServerAddress));
-        }
 
-        var codingAgent = new CodingAgent(new CodingAgentOptions
-        {
-            AdditionalToolSources = additionalToolSources,
-            CopilotInstructionsPath = GetCopilotInstructionsPath(shellSettings),
-        });
+        var codingAgent = new CodingAgent
+        (
+            new CodingAgentOptions
+            {
+                AdditionalToolSources = additionalToolSources,
+                CopilotInstructionsPath = GetCopilotInstructionsPath(shellSettings),
+            }
+        );
         var workspaceController = new CodingWorkspaceController(mainThreadDispatcher);
-        var sessionStore = new FileCodingChatSessionStore(
+        var sessionStore = new FileCodingChatSessionStore
+        (
             paths.SessionDirectory,
             paths.LogDirectory,
             chatManager,
-            mainThreadDispatcher);
+            mainThreadDispatcher
+        );
         var chatRunner = new CodingAgentChatRunner(chatManager, codingAgent);
-        var application = new CodingChatApplication(
+        var application = new CodingChatApplication
+        (
             chatManager,
             sessionStore,
             chatRunner,
             workspaceController,
-            codingAgent);
+            codingAgent
+        );
 
         return new CodingChatRuntime
         (
@@ -94,7 +109,8 @@ internal static class CodingChatStartup
             codingAgent,
             primaryModel,
             application,
-            workspaceController
+            workspaceController,
+            settingsService
         );
     }
 

@@ -56,16 +56,29 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
 
     public ToolRegistrationRegistry ToolRegistrationRegistry { get; }
 
-    public CodingRunWorkspaceContext CreateRunContext() =>
-        new(WorkspacePath, Tools, ToolRegistrationRegistry);
+    public CodingRunWorkspaceContext CreateRunContext(
+        IReadOnlyList<ToolRegistration> additionalToolRegistrations)
+    {
+        ArgumentNullException.ThrowIfNull(additionalToolRegistrations);
+        if (additionalToolRegistrations.Count == 0)
+        {
+            return new CodingRunWorkspaceContext(WorkspacePath, Tools, ToolRegistrationRegistry);
+        }
+
+        ToolRegistration[] registrations = [.. ToolRegistrations, .. additionalToolRegistrations];
+        AITool[] tools = [.. registrations.Select(static registration => registration.Tool)];
+        return new CodingRunWorkspaceContext(
+            WorkspacePath,
+            Array.AsReadOnly(tools),
+            new ToolRegistrationRegistry(registrations));
+    }
 
     public Task<bool> StopLanguageServerAsync() =>
         RoslynTools?.StopLanguageServerAsync() ?? Task.FromResult(false);
 
     public static CodingWorkspaceCache Create(
         string workspacePath,
-        string languageServerCommand,
-        IReadOnlyList<ICodingWorkspaceToolSource> additionalToolSources)
+        string languageServerCommand)
     {
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
@@ -77,7 +90,6 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
             throw new ArgumentException("Roslyn Language Server 命令不能为空。", nameof(languageServerCommand));
         }
 
-        ArgumentNullException.ThrowIfNull(additionalToolSources);
         string fullWorkspacePath = Path.GetFullPath(workspacePath);
         if (!Directory.Exists(fullWorkspacePath))
         {
@@ -97,10 +109,6 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
         var dotNetCliTools = new DotNetCliTools(fullWorkspacePath);
         var dotNetApiTools = new DotNetApiTools(fullWorkspacePath);
         var contentTools = new CodingWorkspaceContentTools(fullWorkspacePath);
-        IReadOnlyList<ToolRegistration> additionalTools = additionalToolSources
-            .SelectMany(source => source.CreateToolRegistrations(fullWorkspacePath))
-            .ToArray();
-
         var roslynTools = new RoslynAgentTools(fullWorkspacePath, languageServerCommand);
         IReadOnlyList<ToolRegistration> registrations =
         [
@@ -109,7 +117,6 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
             .. dotNetCliTools.AsToolRegistrations(),
             .. dotNetApiTools.AsToolRegistrations(),
             .. contentTools.AsToolRegistrations(),
-            .. additionalTools,
         ];
         return new CodingWorkspaceCache(fullWorkspacePath, registrations, roslynTools)
         {

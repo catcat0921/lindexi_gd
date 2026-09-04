@@ -16,8 +16,7 @@ public sealed class CodingWorkspaceCacheTests
 
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
         string[] names = cache.Tools.Select(tool => tool.Name).ToArray();
 
         CollectionAssert.Contains(names, "code_search");
@@ -35,8 +34,7 @@ public sealed class CodingWorkspaceCacheTests
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
         AIFunction codeSearch = cache.Tools.OfType<AIFunction>().Single(tool => tool.Name == "code_search");
 
         object? result = await codeSearch.InvokeAsync(new AIFunctionArguments
@@ -54,8 +52,7 @@ public sealed class CodingWorkspaceCacheTests
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
 
         bool stopped = await cache.StopLanguageServerAsync();
 
@@ -69,8 +66,7 @@ public sealed class CodingWorkspaceCacheTests
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
         await cache.StopLanguageServerAsync();
         AIFunction codeSearch = cache.Tools.OfType<AIFunction>().Single(tool => tool.Name == "code_search");
 
@@ -89,8 +85,8 @@ public sealed class CodingWorkspaceCacheTests
         ToolRegistration registration = new(AIFunctionFactory.Create(() => "ok", "cached_tool"));
         var cache = new CodingWorkspaceCache(workspacePath, [registration]);
 
-        CodingRunWorkspaceContext first = cache.CreateRunContext();
-        CodingRunWorkspaceContext second = cache.CreateRunContext();
+        CodingRunWorkspaceContext first = cache.CreateRunContext([]);
+        CodingRunWorkspaceContext second = cache.CreateRunContext([]);
 
         Assert.AreSame(first.Tools, second.Tools);
         Assert.AreSame(first.ToolRegistrationRegistry, second.ToolRegistrationRegistry);
@@ -104,11 +100,10 @@ public sealed class CodingWorkspaceCacheTests
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
 
-        CodingRunWorkspaceContext first = cache.CreateRunContext();
-        CodingRunWorkspaceContext second = cache.CreateRunContext();
+        CodingRunWorkspaceContext first = cache.CreateRunContext([]);
+        CodingRunWorkspaceContext second = cache.CreateRunContext([]);
 
         AIFunction firstSearchLog = first.Tools.OfType<AIFunction>().Single(tool => tool.Name == "search_last_log");
         AIFunction secondSearchLog = second.Tools.OfType<AIFunction>().Single(tool => tool.Name == "search_last_log");
@@ -140,8 +135,7 @@ public sealed class CodingWorkspaceCacheTests
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
         await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
-            invalidLanguageServerPath,
-            []);
+            invalidLanguageServerPath);
         AIFunction listDirectory = cache.Tools.OfType<AIFunction>()
             .Single(tool => tool.Name == nameof(WorkspaceToolProvider.ListDirectory));
 

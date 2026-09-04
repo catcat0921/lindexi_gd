@@ -211,15 +211,14 @@ public sealed class CodingAgent : IAsyncDisposable
             ThrowIfDisposed();
             if (AreSameWorkspace(_workspaceCache?.WorkspacePath, normalizedPath))
             {
-                return _workspaceCache?.CreateRunContext() ?? CodingRunWorkspaceContext.Empty;
+                return CreateRunWorkspaceContext(_workspaceCache);
             }
 
             CodingWorkspaceCache? replacement = normalizedPath is null
                 ? null
                 : CodingWorkspaceCache.Create(
                     normalizedPath,
-                    _languageServerCommand,
-                    _additionalToolSources);
+                    _languageServerCommand);
             CodingWorkspaceCache? previous = _workspaceCache;
             _workspaceCache = replacement;
             if (previous is not null)
@@ -227,12 +226,25 @@ public sealed class CodingAgent : IAsyncDisposable
                 await previous.DisposeAsync().ConfigureAwait(false);
             }
 
-            return replacement?.CreateRunContext() ?? CodingRunWorkspaceContext.Empty;
+            return CreateRunWorkspaceContext(replacement);
         }
         finally
         {
             _workspaceCacheGate.Release();
         }
+    }
+
+    private CodingRunWorkspaceContext CreateRunWorkspaceContext(CodingWorkspaceCache? workspaceCache)
+    {
+        if (workspaceCache is null)
+        {
+            return CodingRunWorkspaceContext.Empty;
+        }
+
+        IReadOnlyList<ToolRegistration> additionalToolRegistrations = _additionalToolSources
+            .SelectMany(source => source.CreateToolRegistrations(workspaceCache.WorkspacePath))
+            .ToArray();
+        return workspaceCache.CreateRunContext(additionalToolRegistrations);
     }
 
     /// <summary>

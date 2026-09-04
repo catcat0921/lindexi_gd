@@ -1,3 +1,4 @@
+using AgentLib.Coding.Sandboxes;
 using AgentLib.Core.AgentApiManagers.Contexts;
 using AgentLib.Core.AgentApiManagers.LanguageModelProviders.Fakes;
 using AgentLib.Model;
@@ -368,6 +369,54 @@ public sealed class CodingAgentTests
             $"tool_{Path.GetFileName(secondPath)}");
     }
 
+    [TestMethod(DisplayName = "更新沙盒配置后下一轮应重新装配附加工具")]
+    [Timeout(10000)]
+    public async Task SandboxConfigurationUpdateShouldApplyToNextRun()
+    {
+        string workspacePath = CreateTestDirectory();
+        var firstRunStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        IReadOnlyList<AITool>? firstRunTools = null;
+        IReadOnlyList<AITool>? secondRunTools = null;
+        int runCount = 0;
+        var client = new FakeChatClient
+        {
+            OnGetStreamingResponseAsync = (messages, options, cancellationToken) => CaptureWorkspaceToolsAsync(
+                messages,
+                options,
+                Interlocked.Increment(ref runCount),
+                firstRunStarted,
+                releaseFirstRun,
+                tools => firstRunTools = tools,
+                tools => secondRunTools = tools,
+                cancellationToken),
+        };
+        CopilotChatManager chatManager = CreateChatManager(client);
+        var sandboxToolSource = new WindowsSandboxToolSource("WinRemoteShell.exe", "127.0.0.1:12399");
+        await using var agent = new CodingAgent(new CodingAgentOptions
+        {
+            LanguageServerCommand = $"missing-roslyn-{Guid.NewGuid():N}",
+            AdditionalToolSources = [sandboxToolSource],
+        });
+
+        CodingAgentRunResult firstRun = await agent.RunAsync(
+            await chatManager.CreateManualSendMessageContextAsync(),
+            "第一轮",
+            workspacePath);
+        await firstRunStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        sandboxToolSource.UpdateConfiguration(false, string.Empty, string.Empty);
+        Assert.IsTrue(firstRunTools!.Any(tool => tool.Name == "execute_in_windows_sandbox"));
+        releaseFirstRun.TrySetResult();
+        Assert.AreEqual("完成", await firstRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
+        CodingAgentRunResult secondRun = await agent.RunAsync(
+            await chatManager.CreateManualSendMessageContextAsync(),
+            "第二轮",
+            workspacePath);
+        Assert.AreEqual("完成", await secondRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.IsFalse(secondRunTools!.Any(tool => tool.Name == "execute_in_windows_sandbox"));
+    }
+
     [TestMethod(DisplayName = "模型未返回更新时应清除助手占位符并返回空回复")]
     [Timeout(10000)]
     public async Task RunAsyncWhenModelReturnsNoUpdatesShouldClearPlaceholder()
@@ -613,6 +662,13 @@ public sealed class CodingAgentTests
                 () => workspacePath,
                 $"tool_{Path.GetFileName(workspacePath)}"),
         ];
+    }
+
+    private static TaskCompletionSource CompletedTaskSource()
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        completion.TrySetResult();
+        return completion;
     }
 
     private static async IAsyncEnumerable<ChatResponseUpdate> StreamAsync(
