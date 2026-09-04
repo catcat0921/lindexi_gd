@@ -364,13 +364,13 @@ public sealed class DotNetApiToolsTests
         Directory.CreateDirectory(refDirectory);
         Directory.CreateDirectory(libDirectory);
         File.Copy(typeof(ApiFixture).Assembly.Location, Path.Join(refDirectory, "Sample.Package.dll"));
-        File.Copy(typeof(CodingWorkspaceToolProvider).Assembly.Location, Path.Join(libDirectory, "Sample.Package.dll"));
+        File.Copy(typeof(CodingAgent).Assembly.Location, Path.Join(libDirectory, "Sample.Package.dll"));
 
         string result = await WithNuGetCacheAsync(packageRoot, tools => tools.GetDotNetTypeApiAsync(
             "Sample.Package/1.2.3",
-            typeof(CodingWorkspaceToolProvider).FullName!));
+            typeof(CodingAgent).FullName!));
 
-        Assert.AreEqual($"程序集中未找到公开类型“{typeof(CodingWorkspaceToolProvider).FullName}”。", result);
+        Assert.AreEqual($"程序集中未找到公开类型“{typeof(CodingAgent).FullName}”。", result);
     }
 
     [TestMethod(DisplayName = "NuGet 包没有 ref 或 lib DLL 时应返回明确错误")]

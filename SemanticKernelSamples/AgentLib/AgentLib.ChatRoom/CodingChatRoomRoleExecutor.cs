@@ -55,77 +55,26 @@ internal sealed class CodingChatRoomRoleExecutor : IChatRoomRoleExecutor
         }
     }
 
-    public async Task SetWorkspacePathAsync(
+    public Task SetWorkspacePathAsync(
         CopilotChatManager chatManager,
         string? workspacePath,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(chatManager);
         ThrowIfDisposed();
+        cancellationToken.ThrowIfCancellationRequested();
 
-        await using IWorkspaceChangeTransaction transaction = await _codingAgent
-            .PrepareWorkspaceChangeAsync(workspacePath, cancellationToken)
-            .ConfigureAwait(false);
-
-        await _lifecycleLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        string? normalizedPath = string.IsNullOrWhiteSpace(workspacePath)
+            ? null
+            : Path.GetFullPath(workspacePath);
+        if (normalizedPath is not null && !Directory.Exists(normalizedPath))
         {
-            ThrowIfDisposed();
-            string? oldChatManagerWorkspacePath = chatManager.WorkspacePath;
-            string? oldWorkspacePath = _workspacePath;
-            transaction.Apply();
-            try
-            {
-                chatManager.WorkspacePath = transaction.WorkspacePath;
-                _workspacePath = transaction.WorkspacePath;
-            }
-            catch (Exception publishException)
-            {
-                _workspacePath = oldWorkspacePath;
-                Exception? chatManagerRollbackException = null;
-                try
-                {
-                    chatManager.WorkspacePath = oldChatManagerWorkspacePath;
-                }
-                catch (Exception rollbackException)
-                {
-                    chatManagerRollbackException = rollbackException;
-                }
-
-                Exception? transactionRollbackException = null;
-                try
-                {
-                    await transaction.RollbackAsync().ConfigureAwait(false);
-                }
-                catch (Exception rollbackException)
-                {
-                    transactionRollbackException = rollbackException;
-                }
-
-                if (chatManagerRollbackException is not null || transactionRollbackException is not null)
-                {
-                    var exceptions = new List<Exception> { publishException };
-                    if (chatManagerRollbackException is not null)
-                    {
-                        exceptions.Add(chatManagerRollbackException);
-                    }
-                    if (transactionRollbackException is not null)
-                    {
-                        exceptions.Add(transactionRollbackException);
-                    }
-
-                    throw new AggregateException("发布 Coding 工作区失败，且恢复发布前状态时发生错误。", exceptions);
-                }
-
-                throw;
-            }
-
-            transaction.CommitAfterPublish();
+            throw new DirectoryNotFoundException($"指定的工作路径不存在：{normalizedPath}");
         }
-        finally
-        {
-            _lifecycleLock.Release();
-        }
+
+        _workspacePath = normalizedPath;
+        chatManager.WorkspacePath = normalizedPath;
+        return Task.CompletedTask;
     }
 
     public ValueTask DisposeAsync()

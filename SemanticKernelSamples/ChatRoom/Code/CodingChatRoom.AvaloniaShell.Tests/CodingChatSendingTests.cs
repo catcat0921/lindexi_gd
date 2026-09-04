@@ -21,9 +21,7 @@ public sealed class CodingChatSendingTests
         string workspacePath = CreateTestDirectory();
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var workspaceController = new CodingWorkspaceController(
-            new TestWorkspaceRuntime(),
-            new ImmediateMainThreadDispatcher());
+        var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
         await workspaceController.ChangeWorkspaceAsync(workspacePath, CancellationToken.None);
         var application = new CodingChatApplication(
             manager,
@@ -379,34 +377,6 @@ public sealed class CodingChatSendingTests
         string path = Path.Join(Path.GetTempPath(), $"CodingChatRoom.SendWorkspace.{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
         return path;
-    }
-
-    private sealed class TestWorkspaceRuntime : ICodingWorkspaceRuntime
-    {
-        public Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync(
-            string? workspacePath,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<IWorkspaceChangeTransaction>(new TestWorkspaceTransaction(workspacePath));
-        }
-    }
-
-    private sealed class TestWorkspaceTransaction(string? workspacePath) : IWorkspaceChangeTransaction
-    {
-        public string? WorkspacePath { get; } = workspacePath;
-
-        public void Apply()
-        {
-        }
-
-        public ValueTask RollbackAsync() => default;
-
-        public void CommitAfterPublish()
-        {
-        }
-
-        public ValueTask DisposeAsync() => default;
     }
 
     private sealed class ImmediateMainThreadDispatcher : IMainThreadDispatcher
