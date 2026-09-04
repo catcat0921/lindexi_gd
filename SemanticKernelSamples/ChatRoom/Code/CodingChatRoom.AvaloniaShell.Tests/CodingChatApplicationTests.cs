@@ -191,6 +191,45 @@ public sealed class CodingChatApplicationTests
         Assert.IsTrue(compressedMessages.Any(message => message.Text.Contains(summaryText, StringComparison.Ordinal)));
     }
 
+    [DataTestMethod(DisplayName = "循环迭代只应在启用自动压缩时执行轮末总结")]
+    [DataRow(false, 0)]
+    [DataRow(true, 1)]
+    [Timeout(5000)]
+    public async Task RunLoopIterationAsyncShouldConditionallyCompressConversation(
+        bool enableAutomaticCompression,
+        int expectedCompressionCount)
+    {
+        int compressionCount = 0;
+        var chatClient = new FakeChatClient
+        {
+            OnGetResponseAsync = (_, _, _) =>
+            {
+                compressionCount++;
+                return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "循环摘要")]));
+            },
+        };
+        CopilotChatManager manager = CreateChatManager(chatClient);
+        IManualSendMessageContext context = await manager.CreateManualSendMessageContextAsync();
+        AgentSession agentSession = await context.GetAgentSessionAsync();
+        agentSession.SetInMemoryChatHistory(
+        [
+            new ChatMessage(ChatRole.System, "系统提示"),
+            new ChatMessage(ChatRole.User, "用户问题"),
+            new ChatMessage(ChatRole.Assistant, "助手回答"),
+        ]);
+        var runner = new ControllableRunner();
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
+        application.IsLoopIterationEnabled = true;
+
+        Task loopTask = application.RunLoopIterationAsync("继续处理", enableAutomaticCompression);
+        await runner.Started.Task;
+        application.IsLoopIterationEnabled = false;
+        runner.Complete();
+        await loopTask;
+
+        Assert.AreEqual(expectedCompressionCount, compressionCount);
+    }
+
     private static CopilotChatSession CreateSession(string title, string content, DateTimeOffset startedTime)
     {
         var session = new CopilotChatSession(Guid.NewGuid(), startedTime);

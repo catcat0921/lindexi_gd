@@ -260,7 +260,10 @@ internal sealed class CodingChatApplication
         }
     }
 
-    public async Task RunLoopIterationAsync(string prompt, CancellationToken cancellationToken = default)
+    public async Task RunLoopIterationAsync(
+        string prompt,
+        bool enableAutomaticCompression,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(prompt))
         {
@@ -273,9 +276,12 @@ internal sealed class CodingChatApplication
             {
                 await SendMessageAsync(
                     prompt,
-                    enableAutomaticCompression: true,
+                    enableAutomaticCompression,
                     cancellationToken: cancellationToken);
-                await CompressConversationAsync(cancellationToken);
+                if (enableAutomaticCompression)
+                {
+                    await CompressConversationAsync(cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {

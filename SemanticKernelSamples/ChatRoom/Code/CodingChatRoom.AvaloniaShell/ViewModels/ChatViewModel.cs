@@ -555,7 +555,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
             if (runLoopIteration)
             {
                 await _application
-                    .RunLoopIterationAsync(loopPrompt)
+                    .RunLoopIterationAsync(loopPrompt, IsAutomaticCompressionEnabled)
                     .ConfigureAwait(true);
             }
             else

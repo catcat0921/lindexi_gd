@@ -290,6 +290,30 @@ public sealed class ChatViewModelTests
         await runner.Canceled.Task;
     }
 
+    [TestMethod(DisplayName = "循环迭代应使用自动压缩复选框状态")]
+    [Timeout(5000)]
+    public async Task LoopIterationShouldUseAutomaticCompressionOption()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new CompletingRunner(manager);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
+        await application.InitializeAsync();
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
+        {
+            InputText = "继续处理",
+            IsLoopIterationEnabled = true,
+            IsAutomaticCompressionEnabled = false,
+        };
+
+        viewModel.SendCommand.Execute(null);
+        await runner.Started.Task;
+        viewModel.IsLoopIterationEnabled = false;
+        runner.Complete();
+        await WaitUntilAsync(() => !viewModel.IsRunning);
+
+        Assert.IsFalse(runner.ObservedAutomaticCompressionEnabled);
+    }
+
     [TestMethod(DisplayName = "循环迭代取消勾选应等待当前轮完成后退出")]
     [Timeout(5000)]
     public async Task LoopIterationShouldFinishCurrentRunWhenOptionIsCleared()
@@ -628,6 +652,8 @@ public sealed class ChatViewModelTests
 
         public IReadOnlyList<AIContent>? ObservedContents { get; private set; }
 
+        public bool ObservedAutomaticCompressionEnabled { get; private set; }
+
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
@@ -638,6 +664,7 @@ public sealed class ChatViewModelTests
             RunCount++;
             CancellationToken = cancellationToken;
             ObservedContents = contents;
+            ObservedAutomaticCompressionEnabled = enableAutomaticCompression;
             await manager.AppendMessageAsync(CopilotChatMessage.CreateUser(contents), cancellationToken);
             var assistantMessage = CopilotChatMessage.CreateAssistant(CopilotChatMessage.PlaceholderContent, isPresetInfo: false);
             await manager.SelectedSession.AddMessageAsync(assistantMessage);
