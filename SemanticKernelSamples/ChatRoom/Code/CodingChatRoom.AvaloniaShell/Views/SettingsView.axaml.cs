@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 
 using Avalonia.Controls;
@@ -31,20 +32,27 @@ public partial class SettingsView : UserControl
 
     private async void OnInstallOrUpdateLanguageServerClick(object? sender, RoutedEventArgs e)
     {
-        var startInfo = new ProcessStartInfo("dotnet")
+        try
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        startInfo.ArgumentList.Add("tool");
-        startInfo.ArgumentList.Add("update");
-        startInfo.ArgumentList.Add("-g");
-        startInfo.ArgumentList.Add("roslyn-language-server");
+            var startInfo = new ProcessStartInfo("dotnet")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = false,
+            };
+            startInfo.ArgumentList.Add("tool");
+            startInfo.ArgumentList.Add("update");
+            startInfo.ArgumentList.Add("-g");
+            startInfo.ArgumentList.Add("roslyn-language-server");
 
-        using Process? process = Process.Start(startInfo);
-        if (process is not null)
+            using Process? process = Process.Start(startInfo);
+            if (process is not null)
+            {
+                await process.WaitForExitAsync();
+            }
+        }
+        catch
         {
-            await process.WaitForExitAsync();
+            // 忽略
         }
     }
 }
