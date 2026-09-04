@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -24,6 +26,25 @@ public partial class SettingsView : UserControl
             && viewModel.TestWindowsSandboxConnectionCommand.CanExecute(null))
         {
             viewModel.TestWindowsSandboxConnectionCommand.Execute(null);
+        }
+    }
+
+    private async void OnInstallOrUpdateLanguageServerClick(object? sender, RoutedEventArgs e)
+    {
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        startInfo.ArgumentList.Add("tool");
+        startInfo.ArgumentList.Add("update");
+        startInfo.ArgumentList.Add("-g");
+        startInfo.ArgumentList.Add("roslyn-language-server");
+
+        using Process? process = Process.Start(startInfo);
+        if (process is not null)
+        {
+            await process.WaitForExitAsync();
         }
     }
 }
