@@ -32,6 +32,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     private string? _runStatusText;
     private bool _isLoopIterationEnabled;
     private bool _isAutomaticCompressionEnabled = true;
+    private bool _isStoppingLanguageServer;
     private bool _isDisposed;
 
     /// <summary>
@@ -43,6 +44,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleCommand(static () => { }, static () => false);
         CompressConversationCommand = new SimpleCommand(static () => { }, static () => false);
         StopCommand = new SimpleCommand(static () => { }, static () => false);
+        StopLanguageServerCommand = new SimpleCommand(static () => { }, static () => false);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
     }
@@ -60,6 +62,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
+        StopLanguageServerCommand = new SimpleAsyncCommand(StopLanguageServerAsync, () => !IsStoppingLanguageServer);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         _chatManager.PropertyChanged += OnChatManagerPropertyChanged;
         _application.StateChanged += OnApplicationStateChanged;
@@ -84,6 +87,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
+        StopLanguageServerCommand = new SimpleAsyncCommand(StopLanguageServerAsync, () => !IsStoppingLanguageServer);
         ApplyWorkspaceCommand = new SimpleAsyncCommand(ApplyWorkspaceAsync, () => CanApplyWorkspace);
         _chatManager.PropertyChanged += OnChatManagerPropertyChanged;
         _application.StateChanged += OnApplicationStateChanged;
@@ -212,6 +216,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     public ICommand StopCommand { get; }
 
     /// <summary>
+    /// 获取停止 Roslyn Language Server 的命令。
+    /// </summary>
+    public ICommand StopLanguageServerCommand { get; }
+
+    /// <summary>
     /// 获取应用工作路径命令。
     /// </summary>
     public ICommand ApplyWorkspaceCommand { get; }
@@ -243,6 +252,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前是否正在压缩对话。
     /// </summary>
     public bool IsCompressing => _application?.IsCompressionActive == true;
+
+    /// <summary>
+    /// 获取是否正在停止 Roslyn Language Server。
+    /// </summary>
+    public bool IsStoppingLanguageServer => _isStoppingLanguageServer;
 
     /// <summary>
     /// 获取或设置待应用的工作路径。
@@ -441,6 +455,40 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         RaiseCommandCanExecuteChanged();
     }
 
+    private async Task StopLanguageServerAsync()
+    {
+        if (_application is null || _isStoppingLanguageServer)
+        {
+            return;
+        }
+
+        _isStoppingLanguageServer = true;
+        _runStatusText = "正在结束 LSP 服务";
+        OnPropertyChanged(nameof(IsStoppingLanguageServer));
+        OnPropertyChanged(nameof(StatusText));
+        RaiseCommandCanExecuteChanged();
+        try
+        {
+            bool stopped = await _application.StopLanguageServerAsync().ConfigureAwait(true);
+            _runStatusText = stopped
+                ? "LSP 服务已结束，将在下次调用符号工具时重新启动"
+                : "当前没有正在运行的 LSP 服务";
+            await AddSystemMessageAsync(_subscribedSession, _runStatusText).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            _runStatusText = $"结束 LSP 服务失败：{exception.Message}";
+            await AddSystemMessageAsync(_subscribedSession, _runStatusText).ConfigureAwait(true);
+        }
+        finally
+        {
+            _isStoppingLanguageServer = false;
+            OnPropertyChanged(nameof(IsStoppingLanguageServer));
+            OnPropertyChanged(nameof(StatusText));
+            RaiseCommandCanExecuteChanged();
+        }
+    }
+
     private async Task CompressConversationAsync()
     {
         if (_application is null || !CanCompressConversation)
@@ -562,6 +610,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         if (ApplyWorkspaceCommand is SimpleAsyncCommand applyWorkspaceCommand)
         {
             applyWorkspaceCommand.RaiseCanExecuteChanged();
+        }
+
+        if (StopLanguageServerCommand is SimpleAsyncCommand stopLanguageServerCommand)
+        {
+            stopLanguageServerCommand.RaiseCanExecuteChanged();
         }
     }
 

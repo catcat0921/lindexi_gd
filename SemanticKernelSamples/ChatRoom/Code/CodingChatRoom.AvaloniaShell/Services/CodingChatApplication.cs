@@ -334,6 +334,11 @@ internal sealed class CodingChatApplication
         _activeRunCancellationTokenSource?.Cancel();
     }
 
+    public Task<bool> StopLanguageServerAsync()
+    {
+        return _chatRunner?.StopLanguageServerAsync() ?? Task.FromResult(false);
+    }
+
     private void AddOrUpdateSummary(CopilotChatSession session, bool insertAtTop)
     {
         CopilotChatSessionSummary? existing = Sessions.FirstOrDefault(item => item.SessionId == session.SessionId);

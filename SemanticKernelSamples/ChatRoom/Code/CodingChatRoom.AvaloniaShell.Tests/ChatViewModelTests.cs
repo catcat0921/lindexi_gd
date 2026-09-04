@@ -193,6 +193,36 @@ public sealed class ChatViewModelTests
         Assert.AreEqual(CopilotToolApprovalState.Rejected, rejectedItem.ApprovalState);
     }
 
+    [TestMethod(DisplayName = "停止 LSP 命令应调用运行器并显示成功反馈")]
+    public async Task StopLanguageServerCommandShouldShowStoppedFeedback()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new LanguageServerControlRunner(stopped: true);
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
+
+        viewModel.StopLanguageServerCommand.Execute(null);
+        await runner.Called.Task;
+        await WaitUntilAsync(() => viewModel.StatusText.Contains("LSP 服务已结束", StringComparison.Ordinal));
+
+        Assert.AreEqual(1, runner.CallCount);
+    }
+
+    [TestMethod(DisplayName = "没有活动 LSP 时停止命令应显示空操作反馈")]
+    public async Task StopLanguageServerCommandWhenNotRunningShouldShowNoServiceFeedback()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new LanguageServerControlRunner(stopped: false);
+        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
+
+        viewModel.StopLanguageServerCommand.Execute(null);
+        await runner.Called.Task;
+        await WaitUntilAsync(() => viewModel.StatusText == "当前没有正在运行的 LSP 服务");
+
+        Assert.IsTrue(viewModel.StopLanguageServerCommand.CanExecute(null));
+    }
+
     [TestMethod(DisplayName = "输入有效消息时发送命令应运行并清空输入")]
     [Timeout(5000)]
     public async Task SendCommandShouldRunAndClearInput()
@@ -550,6 +580,27 @@ public sealed class ChatViewModelTests
         public Task<T> InvokeAsync<T>(Func<Task<T>> action) => action();
 
         public bool CheckAccess() => true;
+    }
+
+    private sealed class LanguageServerControlRunner(bool stopped) : ICodingChatRunner
+    {
+        public TaskCompletionSource Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CallCount { get; private set; }
+
+        public Task<CodingAgentRunResult> RunAsync(
+            IReadOnlyList<AIContent> contents,
+            string? workspacePath,
+            bool enableAutomaticCompression,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> StopLanguageServerAsync()
+        {
+            CallCount++;
+            Called.TrySetResult();
+            return Task.FromResult(stopped);
+        }
     }
 
     private sealed class ImmediateRunner(CopilotChatManager manager) : ICodingChatRunner

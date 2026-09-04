@@ -191,6 +191,25 @@ public sealed class CodingAgent : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// 停止当前工作区缓存中的 Roslyn Language Server。
+    /// </summary>
+    /// <returns>存在活动 Language Server 并已停止时返回 <see langword="true"/>。</returns>
+    public async Task<bool> StopLanguageServerAsync()
+    {
+        await _workspaceCacheGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            return _workspaceCache is not null
+                && await _workspaceCache.StopLanguageServerAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _workspaceCacheGate.Release();
+        }
+    }
+
     private async Task<CodingRunWorkspaceContext> GetRunWorkspaceContextAsync(
         string? workspacePath,
         CancellationToken cancellationToken)

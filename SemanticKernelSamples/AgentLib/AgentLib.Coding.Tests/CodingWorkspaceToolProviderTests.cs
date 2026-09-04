@@ -49,6 +49,45 @@ public sealed class CodingWorkspaceCacheTests
         StringAssert.Contains(result?.ToString(), "roslyn_language_server_unavailable");
     }
 
+    [TestMethod(DisplayName = "没有活动 Language Server 时停止应为空操作")]
+    [Timeout(15000)]
+    public async Task StopLanguageServerWhenUnavailableShouldReturnFalse()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+            workspacePath,
+            invalidLanguageServerPath,
+            [],
+            CancellationToken.None);
+
+        bool stopped = await cache.StopLanguageServerAsync();
+
+        Assert.IsFalse(stopped);
+    }
+
+    [TestMethod(DisplayName = "停止后符号工具仍应尝试按需启动 Language Server")]
+    [Timeout(15000)]
+    public async Task CodeSearchAfterStopShouldRetryLanguageServerStartup()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+            workspacePath,
+            invalidLanguageServerPath,
+            [],
+            CancellationToken.None);
+        await cache.StopLanguageServerAsync();
+        AIFunction codeSearch = cache.Tools.OfType<AIFunction>().Single(tool => tool.Name == "code_search");
+
+        object? result = await codeSearch.InvokeAsync(new AIFunctionArguments
+        {
+            ["searchQueries"] = new[] { "Sample" },
+        });
+
+        StringAssert.Contains(result?.ToString(), "roslyn_language_server_unavailable");
+    }
+
     [TestMethod(DisplayName = "运行上下文应复用缓存中的工具和展示注册表")]
     public void CreateRunContextShouldReuseCachedState()
     {
