@@ -1,5 +1,4 @@
 using AgentLib.Tools;
-
 using Microsoft.Extensions.AI;
 
 namespace AgentLib.Coding;
@@ -23,16 +22,18 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
     private bool _isRetired;
     private bool _isDisposalStarted;
 
-    internal CodingWorkspaceToolSession(
+    internal CodingWorkspaceToolSession
+    (
         string workspacePath,
         IReadOnlyList<ToolRegistration> registrations,
-        IAsyncDisposable? asyncDisposable = null)
+        IAsyncDisposable? asyncDisposable = null
+    )
     {
-
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
             throw new ArgumentException("工作区路径不能为空。", nameof(workspacePath));
         }
+
         ArgumentNullException.ThrowIfNull(registrations);
 
         WorkspacePath = workspacePath;
@@ -50,11 +51,13 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
 
     public ToolRegistrationRegistry ToolRegistrationRegistry { get; }
 
-    public static async Task<CodingWorkspaceToolSession> CreateAsync(
+    public static async Task<CodingWorkspaceToolSession> CreateAsync
+    (
         string workspacePath,
         string languageServerCommand,
         IReadOnlyList<ICodingWorkspaceToolSource> additionalToolSources,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
@@ -112,10 +115,12 @@ internal sealed class CodingWorkspaceToolSession : IAsyncDisposable
                 .. contentTools.AsToolRegistrations(),
                 .. additionalTools,
             ];
-            return new CodingWorkspaceToolSession(
+            return new CodingWorkspaceToolSession
+            (
                 fullWorkspacePath,
                 registrations,
-                roslynTools);
+                roslynTools
+            );
         }
         catch
         {
