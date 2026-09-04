@@ -81,11 +81,11 @@
                     <StackPanel Spacing="6">
                         <StackPanel IsVisible="{Binding HasInputText}">
                             <TextBlock Classes="SecondaryLabel" Text="{StaticResource ToolInputText}" />
-                            <TextBlock Text="{Binding InputText}" TextWrapping="Wrap" />
+                            <TextBox Classes="ChatOutput" Text="{Binding InputText}" />
                         </StackPanel>
                         <StackPanel IsVisible="{Binding HasOutputText}">
                             <TextBlock Classes="SecondaryLabel" Text="{StaticResource ToolOutputText}" />
-                            <TextBlock Text="{Binding OutputText}" TextWrapping="Wrap" />
+                            <TextBox Classes="ChatOutput" Text="{Binding OutputText}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -101,19 +101,19 @@
                     </StackPanel>
                     <StackPanel IsVisible="{Binding HasApprovalDescription}">
                         <TextBlock Classes="SecondaryLabel" Text="审批说明" />
-                        <TextBlock Text="{Binding ApprovalDescription}" TextWrapping="Wrap" />
+                        <TextBox Classes="ChatOutput" Text="{Binding ApprovalDescription}" />
                     </StackPanel>
                     <StackPanel IsVisible="{Binding HasInputText}">
                         <TextBlock Classes="SecondaryLabel" Text="输入参数" />
-                        <TextBlock Text="{Binding InputText}" TextWrapping="Wrap" />
+                        <TextBox Classes="ChatOutput" Text="{Binding InputText}" />
                     </StackPanel>
                     <StackPanel IsVisible="{Binding HasOutputText}">
                         <TextBlock Classes="SecondaryLabel" Text="工具输出" />
-                        <TextBlock Text="{Binding OutputText}" TextWrapping="Wrap" />
+                        <TextBox Classes="ChatOutput" Text="{Binding OutputText}" />
                     </StackPanel>
                     <StackPanel IsVisible="{Binding HasDecisionReason}">
                         <TextBlock Classes="SecondaryLabel" Text="拒绝原因" />
-                        <TextBlock Text="{Binding DecisionReason}" TextWrapping="Wrap" />
+                        <TextBox Classes="ChatOutput" Text="{Binding DecisionReason}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal"
                                 Spacing="8"
@@ -140,14 +140,14 @@
                     <StackPanel Spacing="6">
                         <StackPanel IsVisible="{Binding HasInputText}">
                             <TextBlock Classes="SecondaryLabel" Text="任务输入" />
-                            <TextBlock Text="{Binding InputText}" TextWrapping="Wrap" />
+                            <TextBox Classes="ChatOutput" Text="{Binding InputText}" />
                         </StackPanel>
                         <ItemsControl ItemsSource="{Binding MessageItems}"
                                       ItemTemplate="{StaticResource ChatMessageItemTemplateSelector}"
                                       IsVisible="{Binding HasMessageItems}" />
                         <StackPanel IsVisible="{Binding HasOutputText}">
                             <TextBlock Classes="SecondaryLabel" Text="返回上级代理的输出" />
-                            <TextBlock Text="{Binding OutputText}" TextWrapping="Wrap" />
+                            <TextBox Classes="ChatOutput" Text="{Binding OutputText}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

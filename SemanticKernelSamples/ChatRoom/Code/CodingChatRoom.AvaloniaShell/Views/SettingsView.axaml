@@ -138,6 +138,37 @@
                 </Border>
 
                 <Border Classes="SettingsCard" Padding="24">
+                    <StackPanel Spacing="16">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Border Classes="SectionIcon">
+                                <TextBlock Text="LSP"
+                                           FontSize="10"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource PrimaryDarkBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="{StaticResource LanguageServerSettingsTitle}"
+                                           Classes="SettingsSectionTitle" />
+                                <TextBlock Text="{StaticResource LanguageServerSettingsDescription}"
+                                           Classes="Subtitle"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Classes="Primary"
+                                    Content="{StaticResource InstallOrUpdateLanguageServerText}"
+                                    Click="OnInstallOrUpdateLanguageServerClick"
+                                    VerticalAlignment="Center" />
+                        </Grid>
+
+                        <TextBlock Text="{StaticResource LanguageServerInstallHint}"
+                                   Classes="SettingsHint"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="SettingsCard" Padding="24">
                     <StackPanel Spacing="20">
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
                             <Border Classes="SectionIcon">
