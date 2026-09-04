@@ -13,7 +13,8 @@ namespace AgentLib.Coding;
 /// </summary>
 public sealed class CodingAgent : IAsyncDisposable
 {
-    private readonly ICodingWorkspaceCacheFactory _workspaceCacheFactory;
+    private readonly string _languageServerCommand;
+    private readonly IReadOnlyList<ICodingWorkspaceToolSource> _additionalToolSources;
     private readonly SemaphoreSlim _workspaceCacheGate = new(1, 1);
     private readonly string? _copilotInstructionsPath;
     private CodingWorkspaceCache? _workspaceCache;
@@ -41,19 +42,9 @@ public sealed class CodingAgent : IAsyncDisposable
             throw new ArgumentException("附加工作区工具源不能包含 null。", nameof(options));
         }
 
-        _workspaceCacheFactory = new CodingWorkspaceCacheFactory(
-            options.LanguageServerCommand,
-            additionalToolSources);
+        _languageServerCommand = options.LanguageServerCommand;
+        _additionalToolSources = additionalToolSources;
         _copilotInstructionsPath = options.CopilotInstructionsPath;
-    }
-
-    internal CodingAgent(
-        ICodingWorkspaceCacheFactory workspaceCacheFactory,
-        string? copilotInstructionsPath = null)
-    {
-        ArgumentNullException.ThrowIfNull(workspaceCacheFactory);
-        _workspaceCacheFactory = workspaceCacheFactory;
-        _copilotInstructionsPath = copilotInstructionsPath;
     }
 
     /// <summary>
@@ -218,7 +209,11 @@ public sealed class CodingAgent : IAsyncDisposable
 
             CodingWorkspaceCache? replacement = normalizedPath is null
                 ? null
-                : await _workspaceCacheFactory.CreateAsync(normalizedPath, cancellationToken).ConfigureAwait(false);
+                : await CodingWorkspaceCache.CreateAsync(
+                    normalizedPath,
+                    _languageServerCommand,
+                    _additionalToolSources,
+                    cancellationToken).ConfigureAwait(false);
             CodingWorkspaceCache? previous = _workspaceCache;
             _workspaceCache = replacement;
             if (previous is not null)

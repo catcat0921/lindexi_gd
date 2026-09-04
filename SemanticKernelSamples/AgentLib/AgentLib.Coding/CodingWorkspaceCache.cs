@@ -4,47 +4,6 @@ using Microsoft.Extensions.AI;
 
 namespace AgentLib.Coding;
 
-internal interface ICodingWorkspaceCacheFactory
-{
-    Task<CodingWorkspaceCache> CreateAsync(string workspacePath, CancellationToken cancellationToken);
-}
-
-internal sealed class CodingWorkspaceCacheFactory : ICodingWorkspaceCacheFactory
-{
-    private readonly string _languageServerCommand;
-    private readonly IReadOnlyList<ICodingWorkspaceToolSource> _additionalToolSources;
-
-    internal CodingWorkspaceCacheFactory
-    (
-        string languageServerCommand,
-        IEnumerable<ICodingWorkspaceToolSource>? additionalToolSources = null
-    )
-    {
-        if (string.IsNullOrWhiteSpace(languageServerCommand))
-        {
-            throw new ArgumentException("Roslyn Language Server 命令不能为空。", nameof(languageServerCommand));
-        }
-
-        _languageServerCommand = languageServerCommand;
-        ICodingWorkspaceToolSource[] sources = additionalToolSources?.ToArray() ?? [];
-        if (sources.Any(static source => source is null))
-        {
-            throw new ArgumentException("附加工作区工具源不能包含 null。", nameof(additionalToolSources));
-        }
-
-        _additionalToolSources = sources;
-    }
-
-    public Task<CodingWorkspaceCache> CreateAsync(string workspacePath, CancellationToken cancellationToken) =>
-        CodingWorkspaceCache.CreateAsync
-        (
-            workspacePath,
-            _languageServerCommand,
-            _additionalToolSources,
-            cancellationToken
-        );
-}
-
 internal sealed class CodingWorkspaceCache : IAsyncDisposable
 {
     private static readonly string[] DefaultExcludedDirectoryNames =

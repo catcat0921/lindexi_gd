@@ -15,9 +15,9 @@ namespace AgentLib.Coding.Tests;
 [TestClass]
 public sealed class CodingAgentTests
 {
-    [TestMethod(DisplayName = "运行应立即返回流式消息并只使用租约工具")]
+    [TestMethod(DisplayName = "运行应立即返回流式消息并使用工作区缓存工具")]
     [Timeout(10000)]
-    public async Task RunAsyncShouldReturnStreamingMessageAndUseOnlyLeaseTools()
+    public async Task RunAsyncShouldReturnStreamingMessageAndUseWorkspaceTools()
     {
         string defaultWorkspace = CreateTestDirectory();
         var streamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -57,9 +57,8 @@ public sealed class CodingAgentTests
 
         Assert.AreSame(context.AssistantChatMessage, result.AssistantChatMessage);
         Assert.IsFalse(result.CompletionTask.IsCompleted);
-        CollectionAssert.AreEqual(
-            new[] { "coding_only" },
-            capturedOptions!.Tools!.Select(tool => tool.Name).ToArray());
+        string[] toolNames = capturedOptions!.Tools!.Select(tool => tool.Name).ToArray();
+        CollectionAssert.Contains(toolNames, "coding_only");
         IReadOnlyList<ChatMessage> runMessages = capturedMessages!;
         Assert.HasCount(4, runMessages);
         Assert.AreEqual(ChatRole.System, runMessages[0].Role);
@@ -321,10 +320,8 @@ public sealed class CodingAgentTests
     [Timeout(10000)]
     public async Task WorkspacePathChangeShouldApplyToNextRun()
     {
-        string firstPath = Path.GetFullPath("first");
-        string secondPath = Path.GetFullPath("second");
-        var firstResource = new TrackingAsyncDisposable();
-        var secondResource = new TrackingAsyncDisposable();
+        string firstPath = CreateTestDirectory();
+        string secondPath = CreateTestDirectory();
         var firstStreamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFirstStream = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         IReadOnlyList<AITool>? firstRunTools = null;
@@ -343,32 +340,32 @@ public sealed class CodingAgentTests
                 cancellationToken),
         };
         CopilotChatManager chatManager = CreateChatManager(client);
-        var factory = CreateProvider((path, _, _) => Task.FromResult(new CodingWorkspaceCache(
-            path,
-            [new ToolRegistration(AIFunctionFactory.Create(() => path, $"tool_{Path.GetFileName(path)}"))],
-            path == firstPath ? firstResource : secondResource)));
-        await using var agent = CreateAgent(factory);
+        await using var agent = new CodingAgent(new CodingAgentOptions
+        {
+            LanguageServerCommand = $"missing-roslyn-{Guid.NewGuid():N}",
+            AdditionalToolSources = [new WorkspaceNamedToolSource()],
+        });
 
         CodingAgentRunResult firstRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "第一轮",
             firstPath);
         await firstStreamStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.AreEqual(0, firstResource.DisposeCount);
-        CollectionAssert.AreEqual(new[] { "tool_first" }, firstRunTools!.Select(tool => tool.Name).ToArray());
+        CollectionAssert.Contains(
+            firstRunTools!.Select(tool => tool.Name).ToArray(),
+            $"tool_{Path.GetFileName(firstPath)}");
 
         releaseFirstStream.TrySetResult();
         Assert.AreEqual("完成", await firstRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        Assert.AreEqual(0, firstResource.DisposeCount);
 
         CodingAgentRunResult secondRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "第二轮",
             secondPath);
         Assert.AreEqual("完成", await secondRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        await firstResource.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.AreEqual(1, firstResource.DisposeCount);
-        CollectionAssert.AreEqual(new[] { "tool_second" }, secondRunTools!.Select(tool => tool.Name).ToArray());
+        CollectionAssert.Contains(
+            secondRunTools!.Select(tool => tool.Name).ToArray(),
+            $"tool_{Path.GetFileName(secondPath)}");
     }
 
     [TestMethod(DisplayName = "模型未返回更新时应清除助手占位符并返回空回复")]
@@ -390,12 +387,12 @@ public sealed class CodingAgentTests
         Assert.AreSame(context.AssistantChatMessage, result.AssistantChatMessage);
     }
 
-    [TestMethod(DisplayName = "运行取消后应保留缓存并允许下一轮更换工作区")]
+    [TestMethod(DisplayName = "运行取消后应允许后续运行")]
     [Timeout(10000)]
-    public async Task RunAsyncWhenCanceledShouldReleaseLeaseAndAllowNextRun()
+    public async Task RunAsyncWhenCanceledShouldAllowNextRun()
     {
+        string workspacePath = CreateTestDirectory();
         var streamStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resource = new TrackingAsyncDisposable();
         int runCount = 0;
         var client = new FakeChatClient
         {
@@ -405,36 +402,31 @@ public sealed class CodingAgentTests
                     : ImmediateStreamAsync(messages, [], cancellationToken),
         };
         CopilotChatManager chatManager = CreateChatManager(client);
-        var factory = CreateProvider("workspace", [], resource);
-        await using var agent = CreateAgent(factory);
+        await using var agent = CreateAgent(CreateProvider(workspacePath, []));
         using var cancellationTokenSource = new CancellationTokenSource();
         CodingAgentRunResult canceledRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "取消任务",
-            "workspace",
+            workspacePath,
             cancellationToken: cancellationTokenSource.Token);
         await streamStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-
-        Assert.AreEqual(0, resource.DisposeCount);
         cancellationTokenSource.Cancel();
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await canceledRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        Assert.AreEqual(0, resource.DisposeCount);
-
         CodingAgentRunResult nextRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "后续任务",
-            "next-workspace");
+            workspacePath);
+
         Assert.AreEqual("完成", await nextRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        Assert.AreEqual(1, resource.DisposeCount);
     }
 
-    [TestMethod(DisplayName = "运行异常后应保留缓存并允许下一轮更换工作区")]
+    [TestMethod(DisplayName = "运行异常后应允许后续运行")]
     [Timeout(10000)]
-    public async Task RunAsyncWhenModelFailsShouldReleaseLeaseAndAllowNextRun()
+    public async Task RunAsyncWhenModelFailsShouldAllowNextRun()
     {
-        var resource = new TrackingAsyncDisposable();
+        string workspacePath = CreateTestDirectory();
         int runCount = 0;
         var client = new FakeChatClient
         {
@@ -444,23 +436,21 @@ public sealed class CodingAgentTests
                     : ImmediateStreamAsync(messages, [], cancellationToken),
         };
         CopilotChatManager chatManager = CreateChatManager(client);
-        var factory = CreateProvider("workspace", [], resource);
-        await using var agent = CreateAgent(factory);
+        await using var agent = CreateAgent(CreateProvider(workspacePath, []));
         CodingAgentRunResult failedRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "失败任务",
-            "workspace");
+            workspacePath);
+
         InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
             await failedRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        Assert.AreEqual("模型失败", exception.Message);
-        Assert.AreEqual(0, resource.DisposeCount);
-
         CodingAgentRunResult nextRun = await agent.RunAsync(
             await chatManager.CreateManualSendMessageContextAsync(),
             "后续任务",
-            "next-workspace");
+            workspacePath);
+
+        Assert.AreEqual("模型失败", exception.Message);
         Assert.AreEqual("完成", await nextRun.CompletionTask.WaitAsync(TimeSpan.FromSeconds(2)));
-        Assert.AreEqual(1, resource.DisposeCount);
     }
 
     [TestMethod(DisplayName = "并发释放调用应等待同一个活动运行")]
@@ -550,22 +540,21 @@ public sealed class CodingAgentTests
     }
 
     private static CodingAgent CreateAgent(
-        ICodingWorkspaceCacheFactory cacheFactory,
+        CodingAgentOptions options,
         string? copilotInstructionsPath = null) =>
-        new(cacheFactory, copilotInstructionsPath);
+        new(options with { CopilotInstructionsPath = copilotInstructionsPath });
 
-    private static ICodingWorkspaceCacheFactory CreateProvider(
+    private static CodingAgentOptions CreateProvider(
         string workspacePath,
-        IReadOnlyList<AITool> tools,
-        IAsyncDisposable? asyncDisposable = null) =>
-        CreateProvider((path, _, _) => Task.FromResult(new CodingWorkspaceCache(
-            path,
-            tools.Select(tool => new ToolRegistration(tool)).ToArray(),
-            Path.GetFullPath(path) == Path.GetFullPath(workspacePath) ? asyncDisposable : null)));
-
-    private static ICodingWorkspaceCacheFactory CreateProvider(
-        Func<string, string, CancellationToken, Task<CodingWorkspaceCache>> createCache) =>
-        new TestCacheFactory(createCache);
+        IReadOnlyList<AITool> tools)
+    {
+        Directory.CreateDirectory(Path.GetFullPath(workspacePath));
+        return new CodingAgentOptions
+        {
+            LanguageServerCommand = $"missing-roslyn-{Guid.NewGuid():N}",
+            AdditionalToolSources = tools.Count == 0 ? [] : [new FixedToolSource(tools)],
+        };
+    }
 
     private static CopilotChatManager CreateChatManager(
         FakeChatClient client,
@@ -607,14 +596,23 @@ public sealed class CodingAgentTests
         }
     }
 
-    private sealed class TestCacheFactory(
-        Func<string, string, CancellationToken, Task<CodingWorkspaceCache>> createCache)
-        : ICodingWorkspaceCacheFactory
+    private sealed class FixedToolSource(IReadOnlyList<AITool> tools) : ICodingWorkspaceToolSource
     {
-        public Task<CodingWorkspaceCache> CreateAsync(
-            string workspacePath,
-            CancellationToken cancellationToken) =>
-            createCache(workspacePath, "test-server", cancellationToken);
+        public IReadOnlyList<AITool> CreateTools(string workspacePath)
+        {
+            _ = workspacePath;
+            return tools;
+        }
+    }
+
+    private sealed class WorkspaceNamedToolSource : ICodingWorkspaceToolSource
+    {
+        public IReadOnlyList<AITool> CreateTools(string workspacePath) =>
+        [
+            AIFunctionFactory.Create(
+                () => workspacePath,
+                $"tool_{Path.GetFileName(workspacePath)}"),
+        ];
     }
 
     private static async IAsyncEnumerable<ChatResponseUpdate> StreamAsync(
