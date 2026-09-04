@@ -43,6 +43,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleCommand(static () => { }, static () => false);
         CompressConversationCommand = new SimpleCommand(static () => { }, static () => false);
         StopCommand = new SimpleCommand(static () => { }, static () => false);
+        StopLanguageServerCommand = new SimpleCommand(static () => { }, static () => false);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
     }
@@ -60,6 +61,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
+        StopLanguageServerCommand = new SimpleAsyncCommand(StopLanguageServerAsync, () => CanStopLanguageServer);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         _chatManager.PropertyChanged += OnChatManagerPropertyChanged;
         _application.StateChanged += OnApplicationStateChanged;
@@ -84,6 +86,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         SendCommand = new SimpleAsyncCommand(SendAsync, () => CanSend, allowConcurrentExecutions: true);
         CompressConversationCommand = new SimpleAsyncCommand(CompressConversationAsync, () => CanCompressConversation);
         StopCommand = new SimpleCommand(application.StopActiveRun, () => IsRunning);
+        StopLanguageServerCommand = new SimpleAsyncCommand(StopLanguageServerAsync, () => CanStopLanguageServer);
         ApplyWorkspaceCommand = new SimpleAsyncCommand(ApplyWorkspaceAsync, () => CanApplyWorkspace);
         _chatManager.PropertyChanged += OnChatManagerPropertyChanged;
         _application.StateChanged += OnApplicationStateChanged;
@@ -212,6 +215,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     public ICommand StopCommand { get; }
 
     /// <summary>
+    /// 获取停止 Roslyn Language Server 的命令。
+    /// </summary>
+    public ICommand StopLanguageServerCommand { get; }
+
+    /// <summary>
     /// 获取应用工作路径命令。
     /// </summary>
     public ICommand ApplyWorkspaceCommand { get; }
@@ -228,6 +236,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前对话是否可以压缩。
     /// </summary>
     public bool CanCompressConversation => _application?.CanCompressConversation == true;
+
+    /// <summary>
+    /// 获取当前是否可以停止 Roslyn Language Server。
+    /// </summary>
+    public bool CanStopLanguageServer => _application is not null && !IsRunning && !IsCompressing;
 
     /// <summary>
     /// 获取是否存在待发送图片。
@@ -435,10 +448,37 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     {
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanCompressConversation));
+        OnPropertyChanged(nameof(CanStopLanguageServer));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(IsCompressing));
         OnPropertyChanged(nameof(SendButtonText));
         RaiseCommandCanExecuteChanged();
+    }
+
+    private async Task StopLanguageServerAsync()
+    {
+        if (_application is null || !CanStopLanguageServer)
+        {
+            return;
+        }
+
+        try
+        {
+            bool stopped = await _application.StopLanguageServerAsync().ConfigureAwait(true);
+            _runStatusText = stopped
+                ? "LSP 服务已结束，将在下次调用符号工具时重新启动"
+                : "当前没有正在运行的 LSP 服务";
+            await AddSystemMessageAsync(_subscribedSession, _runStatusText).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            _runStatusText = $"结束 LSP 服务失败：{exception.Message}";
+            await AddSystemMessageAsync(_subscribedSession, _runStatusText).ConfigureAwait(true);
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(StatusText));
+        }
     }
 
     private async Task CompressConversationAsync()
@@ -562,6 +602,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         if (ApplyWorkspaceCommand is SimpleAsyncCommand applyWorkspaceCommand)
         {
             applyWorkspaceCommand.RaiseCanExecuteChanged();
+        }
+
+        if (StopLanguageServerCommand is SimpleAsyncCommand stopLanguageServerCommand)
+        {
+            stopLanguageServerCommand.RaiseCanExecuteChanged();
         }
     }
 

@@ -27,45 +27,25 @@ public sealed class RoslynAgentTools : IAsyncDisposable
         }, JsonOptions
     );
 
-    private readonly RoslynLspClient? _lspClient;
     private readonly WorkspaceProjectCatalog _catalog;
     private readonly string _workspacePath;
-
-    private RoslynAgentTools(RoslynLspClient? lspClient, string workspacePath)
-    {
-        _lspClient = lspClient;
-        _workspacePath = Path.GetFullPath(workspacePath);
-        _catalog = new WorkspaceProjectCatalog(workspacePath);
-    }
+    private readonly string _languageServerCommand;
+    private RoslynLspClient? _lspClient;
 
     /// <summary>
-    /// 启动 Roslyn Language Server 并创建代码工作区工具会话。
+    /// 创建按需启动 Roslyn Language Server 的代码查询工具。
     /// </summary>
     /// <param name="workspacePath">工作区根目录。</param>
     /// <param name="languageServerCommand">Roslyn Language Server 命令或可执行文件路径。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>需要异步释放的 Roslyn 工具会话。</returns>
-    public static async Task<RoslynAgentTools> CreateAsync
-    (
+    public RoslynAgentTools(
         string workspacePath,
-        string languageServerCommand = DefaultLanguageServerCommand,
-        CancellationToken cancellationToken = default
-    )
+        string languageServerCommand = DefaultLanguageServerCommand)
     {
         ThrowIfNullOrWhiteSpace(workspacePath, nameof(workspacePath));
         ThrowIfNullOrWhiteSpace(languageServerCommand, nameof(languageServerCommand));
-
-        string fullWorkspacePath = Path.GetFullPath(workspacePath);
-        RoslynLspClient lspClient = await RoslynLspClient
-            .StartAsync(fullWorkspacePath, languageServerCommand, cancellationToken)
-            .ConfigureAwait(false);
-        return new RoslynAgentTools(lspClient, fullWorkspacePath);
-    }
-
-    internal static RoslynAgentTools CreateUnavailable(string workspacePath)
-    {
-        ThrowIfNullOrWhiteSpace(workspacePath, nameof(workspacePath));
-        return new RoslynAgentTools(null, Path.GetFullPath(workspacePath));
+        _workspacePath = Path.GetFullPath(workspacePath);
+        _languageServerCommand = languageServerCommand;
+        _catalog = new WorkspaceProjectCatalog(_workspacePath);
     }
 
     /// <summary>
@@ -170,7 +150,7 @@ public sealed class RoslynAgentTools : IAsyncDisposable
     )
     {
         ArgumentNullException.ThrowIfNull(searchQueries);
-        RoslynLspClient? lspClient = _lspClient;
+        RoslynLspClient? lspClient = await GetOrStartLanguageServerAsync(cancellationToken).ConfigureAwait(false);
         if (lspClient is null)
         {
             return LanguageServerUnavailableResult;
@@ -214,7 +194,7 @@ public sealed class RoslynAgentTools : IAsyncDisposable
     )
     {
         ThrowIfNullOrWhiteSpace(symbolName, nameof(symbolName));
-        RoslynLspClient? lspClient = _lspClient;
+        RoslynLspClient? lspClient = await GetOrStartLanguageServerAsync(cancellationToken).ConfigureAwait(false);
         if (lspClient is null)
         {
             return LanguageServerUnavailableResult;
@@ -312,7 +292,7 @@ public sealed class RoslynAgentTools : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(character), character, "字符位置不能小于零。");
         }
 
-        RoslynLspClient? lspClient = _lspClient;
+        RoslynLspClient? lspClient = await GetOrStartLanguageServerAsync(cancellationToken).ConfigureAwait(false);
         if (lspClient is null)
         {
             return LanguageServerUnavailableResult;
@@ -334,7 +314,53 @@ public sealed class RoslynAgentTools : IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public ValueTask DisposeAsync() => _lspClient is null ? default : _lspClient.DisposeAsync();
+    /// <summary>
+    /// 停止当前 Roslyn Language Server。后续符号工具调用会按需重新启动。
+    /// </summary>
+    /// <returns>存在活动 Language Server 并已请求停止时返回 <see langword="true"/>。</returns>
+    public async Task<bool> StopLanguageServerAsync()
+    {
+        RoslynLspClient? lspClient = _lspClient;
+        _lspClient = null;
+        if (lspClient is null)
+        {
+            return false;
+        }
+
+        await lspClient.DisposeAsync().ConfigureAwait(false);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        RoslynLspClient? lspClient = _lspClient;
+        _lspClient = null;
+        if (lspClient is not null)
+        {
+            await lspClient.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task<RoslynLspClient?> GetOrStartLanguageServerAsync(CancellationToken cancellationToken)
+    {
+        if (_lspClient is not null)
+        {
+            return _lspClient;
+        }
+
+        try
+        {
+            _lspClient = await RoslynLspClient
+                .StartAsync(_workspacePath, _languageServerCommand, cancellationToken)
+                .ConfigureAwait(false);
+            return _lspClient;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
 
     private Task<JsonNode?> RequestReferencesAsync
     (

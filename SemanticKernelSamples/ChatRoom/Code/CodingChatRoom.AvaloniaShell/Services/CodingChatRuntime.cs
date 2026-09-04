@@ -1,12 +1,10 @@
 using System;
 using System.Threading.Tasks;
-
 using AgentLib;
 using AgentLib.Coding;
 using AgentLib.Core;
 using AgentLib.Core.AgentApiManagers.LanguageModelProviders;
 using AgentLib.Logging;
-
 using CodingChatRoom.AvaloniaShell.Infrastructure;
 
 namespace CodingChatRoom.AvaloniaShell.Services;
@@ -18,7 +16,8 @@ internal sealed class CodingChatRuntime : IAsyncDisposable
 {
     private readonly CodingAgent _codingAgent;
 
-    public CodingChatRuntime(
+    public CodingChatRuntime
+    (
         CodingChatRoomPaths paths,
         AgentApiEndpointManager endpointManager,
         FileCopilotChatLogger chatLogger,
@@ -26,7 +25,9 @@ internal sealed class CodingChatRuntime : IAsyncDisposable
         CodingAgent codingAgent,
         ILanguageModel primaryModel,
         CodingChatApplication application,
-        CodingWorkspaceController workspaceController)
+        CodingWorkspaceController workspaceController,
+        CodingChatSettingsService settingsService
+    )
     {
         Paths = paths;
         EndpointManager = endpointManager;
@@ -36,6 +37,7 @@ internal sealed class CodingChatRuntime : IAsyncDisposable
         PrimaryModel = primaryModel;
         Application = application;
         WorkspaceController = workspaceController;
+        SettingsService = settingsService;
     }
 
     public CodingChatRoomPaths Paths { get; }
@@ -51,6 +53,8 @@ internal sealed class CodingChatRuntime : IAsyncDisposable
     public CodingChatApplication Application { get; }
 
     public CodingWorkspaceController WorkspaceController { get; }
+
+    public CodingChatSettingsService SettingsService { get; }
 
     public string ModelDisplayName
     {

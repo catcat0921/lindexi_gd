@@ -1,3 +1,6 @@
+using AgentLib.Coding.Sandboxes;
+using AgentLib.Core.AgentApiManagers.LanguageModelProviders;
+
 using CodingChatRoom.AvaloniaShell.Infrastructure;
 using CodingChatRoom.AvaloniaShell.Services;
 using CodingChatRoom.AvaloniaShell.ViewModels;
@@ -7,6 +10,29 @@ namespace CodingChatRoom.AvaloniaShell.Tests;
 [TestClass]
 public sealed class SettingsViewModelTests
 {
+    [TestMethod(DisplayName = "保存设置后应立即更新下一轮使用的沙盒工具配置")]
+    public async Task SaveSettingsShouldUpdateRuntimeSandboxToolSource()
+    {
+        string rootDirectory = Path.Join(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        string workspacePath = Path.Join(rootDirectory, "workspace");
+        Directory.CreateDirectory(workspacePath);
+        var sandboxToolSource = new WindowsSandboxToolSource("OldShell.exe", "127.0.0.1:12399");
+        var settingsService = new CodingChatSettingsService(
+            CodingChatRoomPaths.Create(rootDirectory),
+            sandboxToolSource);
+        var modelConfiguration = new AgentApiManagerConfiguration();
+        var shellSettings = new CodingChatShellSettings
+        {
+            IsWindowsSandboxEnabled = false,
+            WindowsSandboxToolPath = string.Empty,
+            WindowsSandboxServerAddress = string.Empty,
+        };
+
+        await settingsService.SaveAsync(modelConfiguration, shellSettings);
+
+        Assert.IsEmpty(sandboxToolSource.CreateTools(workspacePath));
+    }
+
     [TestMethod(DisplayName = "测试沙箱连接时应立即显示连接中提示")]
     [Timeout(5000)]
     public async Task WhenTestingSandboxConnectionThenConnectingMessageIsShownImmediately()
@@ -47,7 +73,10 @@ public sealed class SettingsViewModelTests
     private static SettingsViewModel CreateViewModel(IWindowsSandboxConnectionTester tester)
     {
         string rootDirectory = Path.Join(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        var settingsService = new CodingChatSettingsService(CodingChatRoomPaths.Create(rootDirectory));
+        var sandboxToolSource = new WindowsSandboxToolSource(false, string.Empty, string.Empty);
+        var settingsService = new CodingChatSettingsService(
+            CodingChatRoomPaths.Create(rootDirectory),
+            sandboxToolSource);
         return new SettingsViewModel(settingsService, tester, static () => { });
     }
 
