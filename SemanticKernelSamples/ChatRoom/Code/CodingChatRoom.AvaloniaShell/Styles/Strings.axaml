@@ -15,7 +15,7 @@
         <sys:String x:Key="LoopIterationText">循环迭代</sys:String>
         <sys:String x:Key="AutomaticCompressionText">自动压缩对话</sys:String>
         <sys:String x:Key="StopLanguageServerText">结束 LSP 服务</sys:String>
-        <sys:String x:Key="StopLanguageServerToolTip">结束当前工作区的 LSP 服务；下次调用符号工具时自动重新启动</sys:String>
+        <sys:String x:Key="StopLanguageServerToolTip">结束当前 LSP 服务；功能逻辑尚未接入</sys:String>
         <sys:String x:Key="EnableDotNetRunText">启用 dotnet run</sys:String>
         <sys:String x:Key="EnableDotNetRunToolTip">下一次发送对话时包含 dotnet run 工具；功能逻辑尚未接入</sys:String>
         <sys:String x:Key="SendText">发送</sys:String>

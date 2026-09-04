@@ -59,9 +59,6 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
     public CodingRunWorkspaceContext CreateRunContext() =>
         new(WorkspacePath, Tools, ToolRegistrationRegistry);
 
-    public Task<bool> StopLanguageServerAsync() =>
-        RoslynTools?.StopLanguageServerAsync() ?? Task.FromResult(false);
-
     public static async Task<CodingWorkspaceCache> CreateAsync
     (
         string workspacePath,
@@ -113,7 +110,7 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            roslynTools = RoslynAgentTools.CreateUnavailable(fullWorkspacePath, languageServerCommand);
+            roslynTools = RoslynAgentTools.CreateUnavailable(fullWorkspacePath);
         }
 
         try

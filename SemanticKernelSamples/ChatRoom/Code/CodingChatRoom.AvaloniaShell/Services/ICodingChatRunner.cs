@@ -23,8 +23,6 @@ internal interface ICodingChatRunner
         IReadOnlyList<AIContent> contents,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
-
-    Task<bool> StopLanguageServerAsync() => Task.FromResult(false);
 }
 
 internal sealed class CodingAgentChatRunner : ICodingChatRunner
@@ -74,8 +72,6 @@ internal sealed class CodingAgentChatRunner : ICodingChatRunner
             ?? throw new InvalidOperationException("当前没有正在运行的编程代理。");
         return activeRun.InjectMessageAsync(contents, cancellationToken);
     }
-
-    public Task<bool> StopLanguageServerAsync() => _codingAgent.StopLanguageServerAsync();
 
     private async Task<string?> CompleteAndClearActiveRunAsync(CodingAgentRunResult run)
     {
