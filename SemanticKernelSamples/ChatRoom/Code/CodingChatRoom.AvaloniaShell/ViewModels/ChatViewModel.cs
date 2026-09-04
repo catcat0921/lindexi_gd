@@ -262,7 +262,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// 获取当前已提交的工作路径。
     /// </summary>
-    public string? CommittedWorkspacePath => _workspaceController?.CommittedWorkspacePath;
+    public string? NextRunWorkspacePath => _workspaceController?.NextRunWorkspacePath;
 
     /// <summary>
     /// 获取工作路径状态文本。
@@ -360,9 +360,9 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         {
             OnPropertyChanged(nameof(WorkspaceInput));
         }
-        else if (e.PropertyName == nameof(CodingWorkspaceController.CommittedWorkspacePath))
+        else if (e.PropertyName == nameof(CodingWorkspaceController.NextRunWorkspacePath))
         {
-            OnPropertyChanged(nameof(CommittedWorkspacePath));
+            OnPropertyChanged(nameof(NextRunWorkspacePath));
         }
         else if (e.PropertyName == nameof(CodingWorkspaceController.StatusText))
         {

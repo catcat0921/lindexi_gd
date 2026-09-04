@@ -459,9 +459,7 @@ public sealed class ChatViewModelTests
         var manager = new CopilotChatManager();
         var application = new CodingChatApplication(manager, new EmptySessionStore());
         await application.InitializeAsync();
-        var workspaceController = new CodingWorkspaceController(
-            new TestWorkspaceRuntime(),
-            new ImmediateMainThreadDispatcher());
+        var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
         using var viewModel = new ChatViewModel(
             manager,
             application,
@@ -472,9 +470,9 @@ public sealed class ChatViewModelTests
         };
 
         viewModel.ApplyWorkspaceCommand.Execute(null);
-        await WaitUntilAsync(() => viewModel.CommittedWorkspacePath is not null);
+        await WaitUntilAsync(() => viewModel.NextRunWorkspacePath is not null);
 
-        Assert.AreEqual(Path.GetFullPath(workspacePath), viewModel.CommittedWorkspacePath);
+        Assert.AreEqual(Path.GetFullPath(workspacePath), viewModel.NextRunWorkspacePath);
         StringAssert.Contains(viewModel.WorkspaceStatusText, "已设置");
         Assert.IsTrue(viewModel.CanApplyWorkspace);
     }
@@ -487,9 +485,7 @@ public sealed class ChatViewModelTests
         var manager = new CopilotChatManager();
         var application = new CodingChatApplication(manager, new EmptySessionStore());
         await application.InitializeAsync();
-        var workspaceController = new CodingWorkspaceController(
-            new TestWorkspaceRuntime(),
-            new ImmediateMainThreadDispatcher());
+        var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
         using var viewModel = new ChatViewModel(
             manager,
             application,
@@ -545,34 +541,6 @@ public sealed class ChatViewModelTests
         {
             await Task.Delay(10, cancellationTokenSource.Token);
         }
-    }
-
-    private sealed class TestWorkspaceRuntime : ICodingWorkspaceRuntime
-    {
-        public Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync(
-            string? workspacePath,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<IWorkspaceChangeTransaction>(new TestWorkspaceTransaction(workspacePath));
-        }
-    }
-
-    private sealed class TestWorkspaceTransaction(string? workspacePath) : IWorkspaceChangeTransaction
-    {
-        public string? WorkspacePath { get; } = workspacePath;
-
-        public void Apply()
-        {
-        }
-
-        public ValueTask RollbackAsync() => default;
-
-        public void CommitAfterPublish()
-        {
-        }
-
-        public ValueTask DisposeAsync() => default;
     }
 
     private sealed class ImmediateMainThreadDispatcher : IMainThreadDispatcher

@@ -213,7 +213,7 @@
                             Spacing="8">
                     <TextBlock Classes="Subtitle" Text="{Binding WorkspaceStatusText}" />
                     <TextBlock Classes="Subtitle"
-                               Text="{Binding CommittedWorkspacePath, StringFormat='当前：{0}'}" />
+                               Text="{Binding NextRunWorkspacePath, StringFormat='下一轮：{0}'}" />
                 </StackPanel>
             </Grid>
         </Border>

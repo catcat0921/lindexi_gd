@@ -13,8 +13,11 @@ namespace AgentLib.Coding;
 /// </summary>
 public sealed class CodingAgent : IAsyncDisposable
 {
-    private readonly CodingWorkspaceToolProvider _toolProvider;
+    private readonly string _languageServerCommand;
+    private readonly IReadOnlyList<ICodingWorkspaceToolSource> _additionalToolSources;
+    private readonly SemaphoreSlim _workspaceCacheGate = new(1, 1);
     private readonly string? _copilotInstructionsPath;
+    private CodingWorkspaceCache? _workspaceCache;
     private readonly object _disposeSync = new();
     private readonly CancellationTokenSource _disposeCancellationTokenSource = new();
     private Task? _disposeTask;
@@ -39,18 +42,15 @@ public sealed class CodingAgent : IAsyncDisposable
             throw new ArgumentException("附加工作区工具源不能包含 null。", nameof(options));
         }
 
-        _toolProvider = new CodingWorkspaceToolProvider
-        (
-            options.LanguageServerCommand,
-            additionalToolSources
-        );
+        _languageServerCommand = options.LanguageServerCommand;
+        _additionalToolSources = additionalToolSources;
         _copilotInstructionsPath = options.CopilotInstructionsPath;
     }
 
     /// <summary>
-    /// 获取当前已提交的代码工作区路径。
+    /// 获取当前缓存的代码工作区路径。
     /// </summary>
-    public string? WorkspacePath => _toolProvider.WorkspacePath;
+    public string? WorkspacePath => _workspaceCache?.WorkspacePath;
 
     /// <summary>
     /// 使用纯文本运行一次编程任务。
@@ -111,7 +111,6 @@ public sealed class CodingAgent : IAsyncDisposable
             throw new ArgumentException("编程任务内容不能为空。", nameof(contents));
         }
 
-        CodingWorkspaceToolLease? lease = null;
         CancellationTokenSource? runCancellationTokenSource = null;
         bool ownershipTransferred = false;
         try
@@ -123,18 +122,15 @@ public sealed class CodingAgent : IAsyncDisposable
                 _disposeCancellationTokenSource.Token
             );
             CancellationToken runCancellationToken = runCancellationTokenSource.Token;
-            if (!AreSameWorkspace(_toolProvider.WorkspacePath, workspacePath))
-            {
-                await _toolProvider.SetWorkspacePathAsync(workspacePath, runCancellationToken).ConfigureAwait(false);
-            }
-
-            lease = await _toolProvider.AcquireLeaseAsync(runCancellationToken).ConfigureAwait(false);
+            CodingRunWorkspaceContext workspaceContext = await GetRunWorkspaceContextAsync(
+                workspacePath,
+                runCancellationToken).ConfigureAwait(false);
             ChatClientAgent chatClientAgent = await context.GetChatClientAgentAsync
             (
                 options =>
                 {
                     options.ChatOptions ??= new ChatOptions();
-                    options.ChatOptions.Tools = [.. lease.Tools];
+                    options.ChatOptions.Tools = [.. workspaceContext.Tools];
                     options.AIContextProviders = [];
                     options.EnableMessageInjection = true;
                     options.RequirePerServiceCallChatHistoryPersistence = true;
@@ -174,7 +170,7 @@ public sealed class CodingAgent : IAsyncDisposable
                 runContents,
                 chatClientAgent,
                 agentSession,
-                lease,
+                workspaceContext.ToolRegistrationRegistry,
                 runCancellationTokenSource
             );
             ownershipTransferred = true;
@@ -191,49 +187,50 @@ public sealed class CodingAgent : IAsyncDisposable
             if (!ownershipTransferred)
             {
                 runCancellationTokenSource?.Dispose();
-                if (lease is not null)
-                {
-                    await lease.DisposeAsync().ConfigureAwait(false);
-                }
             }
         }
     }
 
-    /// <summary>
-    /// 准备一次工作区切换事务。准备阶段不会改变当前已提交工作区。
-    /// </summary>
-    /// <param name="workspacePath">候选工作区路径；为空表示清除工作区。</param>
-    /// <param name="cancellationToken">取消令牌，仅影响候选资源准备。</param>
-    /// <returns>必须提交、回滚或释放的工作区事务。</returns>
-    public async Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync
-    (
+    private async Task<CodingRunWorkspaceContext> GetRunWorkspaceContextAsync(
         string? workspacePath,
-        CancellationToken cancellationToken = default
-    )
+        CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
-        using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource
-        (
-            cancellationToken,
-            _disposeCancellationTokenSource.Token
-        );
-        IWorkspaceChangeTransaction transaction = await _toolProvider
-            .PrepareWorkspaceChangeAsync(workspacePath, linkedCancellationTokenSource.Token)
-            .ConfigureAwait(false);
+        string? normalizedPath = string.IsNullOrWhiteSpace(workspacePath)
+            ? null
+            : Path.GetFullPath(workspacePath);
+        await _workspaceCacheGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
-            return transaction;
+            if (AreSameWorkspace(_workspaceCache?.WorkspacePath, normalizedPath))
+            {
+                return _workspaceCache?.CreateRunContext() ?? CodingRunWorkspaceContext.Empty;
+            }
+
+            CodingWorkspaceCache? replacement = normalizedPath is null
+                ? null
+                : await CodingWorkspaceCache.CreateAsync(
+                    normalizedPath,
+                    _languageServerCommand,
+                    _additionalToolSources,
+                    cancellationToken).ConfigureAwait(false);
+            CodingWorkspaceCache? previous = _workspaceCache;
+            _workspaceCache = replacement;
+            if (previous is not null)
+            {
+                await previous.DisposeAsync().ConfigureAwait(false);
+            }
+
+            return replacement?.CreateRunContext() ?? CodingRunWorkspaceContext.Empty;
         }
-        catch
+        finally
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
-            throw;
+            _workspaceCacheGate.Release();
         }
     }
 
     /// <summary>
-    /// 异步取消活动运行，并在它们完成清理后释放工作区资源。
+    /// 异步取消活动运行，并在它们完成清理后释放工作区缓存。
     /// </summary>
     public ValueTask DisposeAsync()
     {
@@ -250,7 +247,21 @@ public sealed class CodingAgent : IAsyncDisposable
         try
         {
             _disposeCancellationTokenSource.Cancel();
-            await _toolProvider.DisposeAsync().ConfigureAwait(false);
+            await _workspaceCacheGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                CodingWorkspaceCache? cache = _workspaceCache;
+                _workspaceCache = null;
+                if (cache is not null)
+                {
+                    await cache.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _workspaceCacheGate.Release();
+                _workspaceCacheGate.Dispose();
+            }
         }
         finally
         {
@@ -264,7 +275,7 @@ public sealed class CodingAgent : IAsyncDisposable
         IReadOnlyList<AIContent> contents,
         ChatClientAgent chatClientAgent,
         AgentSession agentSession,
-        CodingWorkspaceToolLease lease,
+        ToolRegistrationRegistry toolRegistrationRegistry,
         CancellationTokenSource runCancellationTokenSource
     )
     {
@@ -305,7 +316,7 @@ public sealed class CodingAgent : IAsyncDisposable
                                cancellationToken
                            ))
             {
-                AppendResponseUpdate(context, update, lease.ToolRegistrationRegistry);
+                AppendResponseUpdate(context, update, toolRegistrationRegistry);
                 hasResponseUpdate = true;
             }
 
@@ -329,14 +340,7 @@ public sealed class CodingAgent : IAsyncDisposable
             }
             finally
             {
-                try
-                {
-                    await lease.DisposeAsync().ConfigureAwait(false);
-                }
-                finally
-                {
-                    runCancellationTokenSource.Dispose();
-                }
+                runCancellationTokenSource.Dispose();
             }
         }
     }

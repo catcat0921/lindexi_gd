@@ -71,9 +71,7 @@ internal static class CodingChatStartup
             AdditionalToolSources = additionalToolSources,
             CopilotInstructionsPath = GetCopilotInstructionsPath(shellSettings),
         });
-        var workspaceController = new CodingWorkspaceController(
-            new CodingAgentWorkspaceRuntime(codingAgent),
-            mainThreadDispatcher);
+        var workspaceController = new CodingWorkspaceController(mainThreadDispatcher);
         var sessionStore = new FileCodingChatSessionStore(
             paths.SessionDirectory,
             paths.LogDirectory,
