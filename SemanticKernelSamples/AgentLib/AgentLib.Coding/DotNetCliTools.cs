@@ -15,6 +15,8 @@ public sealed class DotNetCliTools
 {
     private const int DefaultMaxOutputCharacters = 20000;
     private static readonly TimeSpan DefaultTestTimeout = TimeSpan.FromMinutes(5);
+    private const int DefaultRunTimeoutSeconds = 300;
+    private const int MaxRunTimeoutSeconds = 86400;
     private const int MaxErrorPreviewCharacters = 500;
     private const int MaxLineCharacters = 2000;
     private const int MaxQueryLinesReturn = 200;
@@ -47,6 +49,15 @@ public sealed class DotNetCliTools
     /// <returns>包含 <c>run_build</c>、<c>run_msbuild</c> 和 <c>run_tests</c> 等功能的工具集合。</returns>
     public IReadOnlyList<AITool> AsAITools() => AsToolRegistrations().Select
         (registration => registration.Tool).ToArray();
+
+    /// <summary>
+    /// 创建可选的 <c>dotnet run</c> 工具及其展示摘要规则。
+    /// </summary>
+    public ToolRegistration CreateRunToolRegistration() => new
+    (
+        AIFunctionFactory.Create(RunDotNetRunAsync, "RunDotNetRun"),
+        arguments => ToolCallPresentationFactory.ForQuery(arguments, "commandLine")
+    );
 
     /// <summary>
     /// 创建 .NET 工具及其展示摘要规则。
@@ -197,6 +208,60 @@ public sealed class DotNetCliTools
             cancellationToken,
             rawArguments: arguments
         );
+    }
+
+    /// <summary>
+    /// 执行严格以 <c>dotnet run</c> 开头的完整命令行。
+    /// </summary>
+    /// <param name="commandLine">必须严格以 <c>dotnet run</c> 开头的完整命令行。</param>
+    /// <param name="timeoutSeconds">运行超时秒数，默认五分钟。</param>
+    /// <param name="cancellationToken">用于取消运行的令牌。</param>
+    /// <returns>运行输出、退出码和执行结果。</returns>
+    [Description("执行严格以 dotnet run 开头的完整命令行。工作目录固定为当前代码工作区，不通过 Shell 执行；超时时间默认 300 秒。")]
+    public async Task<string> RunDotNetRunAsync
+    (
+        [Description("完整运行命令行，必须严格以 dotnet run 开头，例如 dotnet run --project MyApp.csproj -- --debug。")]
+        string commandLine,
+        [Description("运行超时秒数，默认 300 秒，允许范围为 1 到 100000 秒。")]
+        int timeoutSeconds = DefaultRunTimeoutSeconds,
+        CancellationToken cancellationToken = default
+    )
+    {
+        const string requiredPrefix = "dotnet run";
+        if (string.IsNullOrEmpty(commandLine)
+            || !commandLine.StartsWith(requiredPrefix, StringComparison.Ordinal)
+            || commandLine.Length > requiredPrefix.Length && !char.IsWhiteSpace(commandLine[requiredPrefix.Length])
+            || commandLine.IndexOfAny(['\r', '\n', '\0']) >= 0)
+        {
+            return "命令行必须严格以 dotnet run 开头，且不能包含前导空白、换行或空字符。";
+        }
+
+        if (timeoutSeconds is < 1 or > MaxRunTimeoutSeconds)
+        {
+            return $"超时秒数必须在 1 到 {MaxRunTimeoutSeconds} 之间。";
+        }
+
+        using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        try
+        {
+            string arguments = commandLine["dotnet ".Length..];
+            return await RunProcessCommandAsync
+                (
+                    "dotnet",
+                    commandLine,
+                    targetPath: null,
+                    timeoutCancellationTokenSource.Token,
+                    rawArguments: arguments,
+                    includeExitCodeInSummary: true
+                )
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested
+                                                 && timeoutCancellationTokenSource.IsCancellationRequested)
+        {
+            return $"dotnet run 已超时（{timeoutSeconds} 秒）。";
+        }
     }
 
     /// <summary>
@@ -381,7 +446,8 @@ public sealed class DotNetCliTools
         CancellationToken cancellationToken,
         IReadOnlyList<string>? arguments = null,
         IReadOnlyList<string>? argumentsBeforeTarget = null,
-        string? rawArguments = null
+        string? rawArguments = null,
+        bool includeExitCodeInSummary = false
     )
     {
         if (!TryResolveTarget(targetPath, out string? resolvedTargetPath, out string errorMessage))
@@ -458,7 +524,8 @@ public sealed class DotNetCliTools
             int totalLines = lines.Length;
             if (process.ExitCode == 0)
             {
-                return $"执行成功。完整日志共 {totalLines} 行，可使用 read_last_log_lines 按行读取。";
+                string exitCodeSummary = includeExitCodeInSummary ? $"退出码为 {process.ExitCode}。" : string.Empty;
+                return $"执行成功。{exitCodeSummary}完整日志共 {totalLines} 行，可使用 read_last_log_lines 按行读取。";
             }
 
             // 查找首个包含 error 的行（不区分大小写）
@@ -469,10 +536,12 @@ public sealed class DotNetCliTools
                 string preview = firstErrorLine.Length <= MaxErrorPreviewCharacters
                     ? firstErrorLine
                     : $"{firstErrorLine[..MaxErrorPreviewCharacters]}…【该错误行已截断】";
-                return $"执行失败。完整日志共 {totalLines} 行。首个包含 error 的行：{preview}";
+                string exitCodeSummary = includeExitCodeInSummary ? $"退出码为 {process.ExitCode}。" : string.Empty;
+                return $"执行失败。{exitCodeSummary}完整日志共 {totalLines} 行。首个包含 error 的行：{preview}";
             }
 
-            return $"执行失败。完整日志共 {totalLines} 行，可使用 read_last_log_lines 按行读取。";
+            string failureExitCodeSummary = includeExitCodeInSummary ? $"退出码为 {process.ExitCode}。" : string.Empty;
+            return $"执行失败。{failureExitCodeSummary}完整日志共 {totalLines} 行，可使用 read_last_log_lines 按行读取。";
         }
         catch (OperationCanceledException)
         {

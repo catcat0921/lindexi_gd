@@ -161,6 +161,7 @@ internal sealed class CodingChatApplication
     (
         string prompt,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -169,13 +170,18 @@ internal sealed class CodingChatApplication
             throw new ArgumentException("消息内容不能为空。", nameof(prompt));
         }
 
-        await SendMessageAsync([new TextContent(prompt)], enableAutomaticCompression, cancellationToken);
+        await SendMessageAsync(
+            [new TextContent(prompt)],
+            enableAutomaticCompression,
+            enableDotNetRun,
+            cancellationToken);
     }
 
     public async Task SendMessageAsync
     (
         IReadOnlyList<AIContent> contents,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -213,6 +219,7 @@ internal sealed class CodingChatApplication
                     runContents,
                     _workspaceController.NextRunWorkspacePath,
                     enableAutomaticCompression,
+                    enableDotNetRun,
                     runCancellationTokenSource.Token
                 );
             await runResult.CompletionTask;
@@ -264,7 +271,10 @@ internal sealed class CodingChatApplication
         {
             try
             {
-                await SendMessageAsync(prompt, enableAutomaticCompression: true, cancellationToken);
+                await SendMessageAsync(
+                    prompt,
+                    enableAutomaticCompression: true,
+                    cancellationToken: cancellationToken);
                 await CompressConversationAsync(cancellationToken);
             }
             catch (OperationCanceledException)

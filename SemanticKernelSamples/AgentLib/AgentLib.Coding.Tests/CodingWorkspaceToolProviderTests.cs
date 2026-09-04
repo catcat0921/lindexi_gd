@@ -22,8 +22,23 @@ public sealed class CodingWorkspaceCacheTests
         CollectionAssert.Contains(names, "code_search");
         CollectionAssert.Contains(names, nameof(WorkspaceToolProvider.ListDirectory));
         CollectionAssert.Contains(names, "run_build");
+        CollectionAssert.DoesNotContain(names, "RunDotNetRun");
         CollectionAssert.Contains(names, "ListDotNetApi");
         CollectionAssert.Contains(names, "load_image");
+    }
+
+    [TestMethod(DisplayName = "启用 dotnet run 时本轮工具快照应包含运行工具")]
+    public async Task CreateRunContextWhenDotNetRunIsEnabledShouldIncludeRunTool()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
+            workspacePath,
+            invalidLanguageServerPath);
+
+        CodingRunWorkspaceContext context = cache.CreateRunContext([], enableDotNetRun: true);
+
+        CollectionAssert.Contains(context.Tools.Select(tool => tool.Name).ToArray(), "RunDotNetRun");
     }
 
     [TestMethod(DisplayName = "Language Server 启动失败时符号工具应返回可读错误")]

@@ -32,6 +32,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     private string? _runStatusText;
     private bool _isLoopIterationEnabled;
     private bool _isAutomaticCompressionEnabled = true;
+    private bool _isDotNetRunEnabled;
     private bool _isDisposed;
 
     /// <summary>
@@ -197,6 +198,15 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     {
         get => _isAutomaticCompressionEnabled;
         set => SetField(ref _isAutomaticCompressionEnabled, value);
+    }
+
+    /// <summary>
+    /// 获取或设置下一次新运行是否提供 <c>dotnet run</c> 工具。
+    /// </summary>
+    public bool IsDotNetRunEnabled
+    {
+        get => _isDotNetRunEnabled;
+        set => SetField(ref _isDotNetRunEnabled, value);
     }
 
     /// <summary>
@@ -551,8 +561,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
             else
             {
                 await _application
-                .SendMessageAsync(contents, IsAutomaticCompressionEnabled)
-                .ConfigureAwait(true);
+                    .SendMessageAsync(
+                        contents,
+                        IsAutomaticCompressionEnabled,
+                        IsDotNetRunEnabled)
+                    .ConfigureAwait(true);
             }
 
             _runStatusText = isInterruption && IsRunning

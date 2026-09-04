@@ -59,6 +59,7 @@ public sealed class CodingAgent : IAsyncDisposable
     /// <param name="prompt">用户任务文本。</param>
     /// <param name="workspacePath">本次运行期望使用的工作区路径。</param>
     /// <param name="enableAutomaticCompression">是否自动压缩对话历史。</param>
+    /// <param name="enableDotNetRun">是否为本次运行提供 <c>dotnet run</c> 工具。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>流式消息和完整生命周期任务。</returns>
     public Task<CodingAgentRunResult> RunAsync
@@ -67,6 +68,7 @@ public sealed class CodingAgent : IAsyncDisposable
         string prompt,
         string? workspacePath,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -81,6 +83,7 @@ public sealed class CodingAgent : IAsyncDisposable
             [new TextContent(prompt)],
             workspacePath,
             enableAutomaticCompression,
+            enableDotNetRun,
             cancellationToken
         );
     }
@@ -92,6 +95,7 @@ public sealed class CodingAgent : IAsyncDisposable
     /// <param name="contents">保持原始顺序的用户输入内容。</param>
     /// <param name="workspacePath">本次运行期望使用的工作区路径。</param>
     /// <param name="enableAutomaticCompression">是否自动压缩对话历史。</param>
+    /// <param name="enableDotNetRun">是否为本次运行提供 <c>dotnet run</c> 工具。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>流式消息和完整生命周期任务。</returns>
     public async Task<CodingAgentRunResult> RunAsync
@@ -100,6 +104,7 @@ public sealed class CodingAgent : IAsyncDisposable
         IReadOnlyList<AIContent> contents,
         string? workspacePath,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -124,6 +129,7 @@ public sealed class CodingAgent : IAsyncDisposable
             CancellationToken runCancellationToken = runCancellationTokenSource.Token;
             CodingRunWorkspaceContext workspaceContext = await GetRunWorkspaceContextAsync(
                 workspacePath,
+                enableDotNetRun,
                 runCancellationToken).ConfigureAwait(false);
             ChatClientAgent chatClientAgent = await context.GetChatClientAgentAsync
             (
@@ -200,6 +206,7 @@ public sealed class CodingAgent : IAsyncDisposable
 
     private async Task<CodingRunWorkspaceContext> GetRunWorkspaceContextAsync(
         string? workspacePath,
+        bool enableDotNetRun,
         CancellationToken cancellationToken)
     {
         string? normalizedPath = string.IsNullOrWhiteSpace(workspacePath)
@@ -211,7 +218,7 @@ public sealed class CodingAgent : IAsyncDisposable
             ThrowIfDisposed();
             if (AreSameWorkspace(_workspaceCache?.WorkspacePath, normalizedPath))
             {
-                return CreateRunWorkspaceContext(_workspaceCache);
+                return CreateRunWorkspaceContext(_workspaceCache, enableDotNetRun);
             }
 
             CodingWorkspaceCache? replacement = normalizedPath is null
@@ -226,7 +233,7 @@ public sealed class CodingAgent : IAsyncDisposable
                 await previous.DisposeAsync().ConfigureAwait(false);
             }
 
-            return CreateRunWorkspaceContext(replacement);
+            return CreateRunWorkspaceContext(replacement, enableDotNetRun);
         }
         finally
         {
@@ -234,7 +241,9 @@ public sealed class CodingAgent : IAsyncDisposable
         }
     }
 
-    private CodingRunWorkspaceContext CreateRunWorkspaceContext(CodingWorkspaceCache? workspaceCache)
+    private CodingRunWorkspaceContext CreateRunWorkspaceContext(
+        CodingWorkspaceCache? workspaceCache,
+        bool enableDotNetRun)
     {
         if (workspaceCache is null)
         {
@@ -244,7 +253,7 @@ public sealed class CodingAgent : IAsyncDisposable
         IReadOnlyList<ToolRegistration> additionalToolRegistrations = _additionalToolSources
             .SelectMany(source => source.CreateToolRegistrations(workspaceCache.WorkspacePath))
             .ToArray();
-        return workspaceCache.CreateRunContext(additionalToolRegistrations);
+        return workspaceCache.CreateRunContext(additionalToolRegistrations, enableDotNetRun);
     }
 
     /// <summary>

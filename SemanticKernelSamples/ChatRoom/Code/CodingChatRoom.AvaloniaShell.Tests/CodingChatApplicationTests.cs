@@ -285,6 +285,7 @@ public sealed class CodingChatApplicationTests
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
             bool enableAutomaticCompression,
+            bool enableDotNetRun,
             CancellationToken cancellationToken)
         {
             Started.TrySetResult();
