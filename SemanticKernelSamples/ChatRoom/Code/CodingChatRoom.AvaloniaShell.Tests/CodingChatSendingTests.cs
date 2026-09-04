@@ -23,7 +23,7 @@ public sealed class CodingChatSendingTests
         var runner = new TestCodingChatRunner(manager);
         var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
         await workspaceController.ChangeWorkspaceAsync(workspacePath, CancellationToken.None);
-        var application = new CodingChatApplication(
+        var application = CodingChatApplicationTestFactory.CreateApplication(
             manager,
             new TestSessionStore(),
             runner,
@@ -44,7 +44,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
 
         Task sendTask = application.SendMessageAsync("检查代码");
@@ -61,7 +61,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
 
         Task sendTask = application.SendMessageAsync("检查代码", enableAutomaticCompression: false);
@@ -78,7 +78,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
         IReadOnlyList<AIContent> contents =
         [
@@ -105,7 +105,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
 
         Task sendTask = application.SendMessageAsync("检查代码");
@@ -132,7 +132,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
         Task firstSend = application.SendMessageAsync("第一条");
         await runner.Started.Task;
@@ -152,7 +152,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore { BlockSave = true };
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
         Task firstSend = application.SendMessageAsync("第一条");
         await runner.Started.Task;
@@ -177,7 +177,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
         Task sendTask = application.SendMessageAsync("等待取消");
         await runner.Started.Task;
@@ -195,7 +195,7 @@ public sealed class CodingChatSendingTests
     {
         var manager = new CopilotChatManager();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
         Task sendTask = application.SendMessageAsync("触发异常");
         await runner.Started.Task;
@@ -214,7 +214,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore { SaveException = new IOException("保存失败") };
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
         Task sendTask = application.SendMessageAsync("触发异常");
         await runner.Started.Task;
@@ -233,7 +233,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore { SaveException = new IOException("保存失败") };
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
         Task sendTask = application.SendMessageAsync("正常运行");
         await runner.Started.Task;
@@ -252,7 +252,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
         Task sendTask = application.SendMessageAsync("无内容回复");
         await runner.Started.Task;
@@ -271,7 +271,7 @@ public sealed class CodingChatSendingTests
         var manager = new CopilotChatManager();
         var store = new TestSessionStore();
         var runner = new TestCodingChatRunner(manager);
-        var application = new CodingChatApplication(manager, store, runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, runner);
         await application.InitializeAsync();
         CopilotChatSession runningSession = manager.SelectedSession;
         Task sendTask = application.SendMessageAsync("检查代码");

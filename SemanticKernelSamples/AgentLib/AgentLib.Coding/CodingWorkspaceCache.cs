@@ -59,13 +59,13 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
     public CodingRunWorkspaceContext CreateRunContext() =>
         new(WorkspacePath, Tools, ToolRegistrationRegistry);
 
-    public static async Task<CodingWorkspaceCache> CreateAsync
-    (
+    public Task<bool> StopLanguageServerAsync() =>
+        RoslynTools?.StopLanguageServerAsync() ?? Task.FromResult(false);
+
+    public static CodingWorkspaceCache Create(
         string workspacePath,
         string languageServerCommand,
-        IReadOnlyList<ICodingWorkspaceToolSource> additionalToolSources,
-        CancellationToken cancellationToken
-    )
+        IReadOnlyList<ICodingWorkspaceToolSource> additionalToolSources)
     {
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
@@ -101,43 +101,24 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
             .SelectMany(source => source.CreateToolRegistrations(fullWorkspacePath))
             .ToArray();
 
-        RoslynAgentTools roslynTools;
-        try
+        var roslynTools = new RoslynAgentTools(fullWorkspacePath, languageServerCommand);
+        IReadOnlyList<ToolRegistration> registrations =
+        [
+            .. roslynTools.AsToolRegistrations(),
+            .. workspaceTools.CreateDefaultToolRegistrations(),
+            .. dotNetCliTools.AsToolRegistrations(),
+            .. dotNetApiTools.AsToolRegistrations(),
+            .. contentTools.AsToolRegistrations(),
+            .. additionalTools,
+        ];
+        return new CodingWorkspaceCache(fullWorkspacePath, registrations, roslynTools)
         {
-            roslynTools = await RoslynAgentTools
-                .CreateAsync(fullWorkspacePath, languageServerCommand, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            roslynTools = RoslynAgentTools.CreateUnavailable(fullWorkspacePath);
-        }
-
-        try
-        {
-            IReadOnlyList<ToolRegistration> registrations =
-            [
-                .. roslynTools.AsToolRegistrations(),
-                .. workspaceTools.CreateDefaultToolRegistrations(),
-                .. dotNetCliTools.AsToolRegistrations(),
-                .. dotNetApiTools.AsToolRegistrations(),
-                .. contentTools.AsToolRegistrations(),
-                .. additionalTools,
-            ];
-            return new CodingWorkspaceCache(fullWorkspacePath, registrations, roslynTools)
-            {
-                WorkspaceTools = workspaceTools,
-                DotNetCliTools = dotNetCliTools,
-                DotNetApiTools = dotNetApiTools,
-                ContentTools = contentTools,
-                RoslynTools = roslynTools,
-            };
-        }
-        catch
-        {
-            await roslynTools.DisposeAsync().ConfigureAwait(false);
-            throw;
-        }
+            WorkspaceTools = workspaceTools,
+            DotNetCliTools = dotNetCliTools,
+            DotNetApiTools = dotNetApiTools,
+            ContentTools = contentTools,
+            RoslynTools = roslynTools,
+        };
     }
 
     public ValueTask DisposeAsync()

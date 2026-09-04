@@ -9,16 +9,15 @@ public sealed class CodingWorkspaceCacheTests
 {
     [TestMethod(DisplayName = "工作区缓存应装配文件、Roslyn、CLI 和内容工具")]
     [Timeout(15000)]
-    public async Task CreateAsyncShouldComposeWorkspaceTools()
+    public async Task CreateShouldComposeWorkspaceTools()
     {
         string workspacePath = CreateTestDirectory();
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
 
-        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
             invalidLanguageServerPath,
-            [],
-            CancellationToken.None);
+            []);
         string[] names = cache.Tools.Select(tool => tool.Name).ToArray();
 
         CollectionAssert.Contains(names, "code_search");
@@ -34,11 +33,45 @@ public sealed class CodingWorkspaceCacheTests
     {
         string workspacePath = CreateTestDirectory();
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
-        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
             invalidLanguageServerPath,
-            [],
-            CancellationToken.None);
+            []);
+        AIFunction codeSearch = cache.Tools.OfType<AIFunction>().Single(tool => tool.Name == "code_search");
+
+        object? result = await codeSearch.InvokeAsync(new AIFunctionArguments
+        {
+            ["searchQueries"] = new[] { "Sample" },
+        });
+
+        StringAssert.Contains(result?.ToString(), "roslyn_language_server_unavailable");
+    }
+
+    [TestMethod(DisplayName = "没有活动 Language Server 时停止应返回 false")]
+    public async Task StopLanguageServerWhenUnavailableShouldReturnFalse()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
+            workspacePath,
+            invalidLanguageServerPath,
+            []);
+
+        bool stopped = await cache.StopLanguageServerAsync();
+
+        Assert.IsFalse(stopped);
+    }
+
+    [TestMethod(DisplayName = "停止后符号工具应继续尝试启动 Language Server")]
+    public async Task CodeSearchAfterStopShouldRetryLanguageServerStartup()
+    {
+        string workspacePath = CreateTestDirectory();
+        string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
+            workspacePath,
+            invalidLanguageServerPath,
+            []);
+        await cache.StopLanguageServerAsync();
         AIFunction codeSearch = cache.Tools.OfType<AIFunction>().Single(tool => tool.Name == "code_search");
 
         object? result = await codeSearch.InvokeAsync(new AIFunctionArguments
@@ -69,11 +102,10 @@ public sealed class CodingWorkspaceCacheTests
     {
         string workspacePath = CreateTestDirectory();
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
-        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
             invalidLanguageServerPath,
-            [],
-            CancellationToken.None);
+            []);
 
         CodingRunWorkspaceContext first = cache.CreateRunContext();
         CodingRunWorkspaceContext second = cache.CreateRunContext();
@@ -106,11 +138,10 @@ public sealed class CodingWorkspaceCacheTests
         await File.WriteAllTextAsync(Path.Join(workspacePath, "bin", "binary.txt"), "bin-content");
         await File.WriteAllTextAsync(Path.Join(workspacePath, "source.txt"), "source-content");
         string invalidLanguageServerPath = CreateInvalidLanguageServerFile(workspacePath);
-        await using CodingWorkspaceCache cache = await CodingWorkspaceCache.CreateAsync(
+        await using CodingWorkspaceCache cache = CodingWorkspaceCache.Create(
             workspacePath,
             invalidLanguageServerPath,
-            [],
-            CancellationToken.None);
+            []);
         AIFunction listDirectory = cache.Tools.OfType<AIFunction>()
             .Single(tool => tool.Name == nameof(WorkspaceToolProvider.ListDirectory));
 

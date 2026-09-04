@@ -17,45 +17,32 @@ internal sealed class CodingChatApplication
 {
     private readonly CopilotChatManager _chatManager;
     private readonly ICodingChatSessionStore _sessionStore;
-    private readonly ICodingChatRunner? _chatRunner;
-    private readonly CodingWorkspaceController? _workspaceController;
+    private readonly ICodingChatRunner _chatRunner;
+    private readonly CodingWorkspaceController _workspaceController;
+    private readonly CodingAgent _codingAgent;
     private CancellationTokenSource? _activeRunCancellationTokenSource;
     private volatile bool _isLoopIterationEnabled;
     private bool _isCompressionActive;
     private bool _isRunActive;
 
-    public CodingChatApplication(CopilotChatManager chatManager, ICodingChatSessionStore sessionStore)
-    {
-        ArgumentNullException.ThrowIfNull(chatManager);
-        ArgumentNullException.ThrowIfNull(sessionStore);
-        _chatManager = chatManager;
-        _sessionStore = sessionStore;
-        AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
-    }
-
-    public CodingChatApplication
-    (
-        CopilotChatManager chatManager,
-        ICodingChatSessionStore sessionStore,
-        ICodingChatRunner chatRunner
-    )
-        : this(chatManager, sessionStore)
-    {
-        ArgumentNullException.ThrowIfNull(chatRunner);
-        _chatRunner = chatRunner;
-    }
-
-    public CodingChatApplication
-    (
+    public CodingChatApplication(
         CopilotChatManager chatManager,
         ICodingChatSessionStore sessionStore,
         ICodingChatRunner chatRunner,
-        CodingWorkspaceController workspaceController
-    )
-        : this(chatManager, sessionStore, chatRunner)
+        CodingWorkspaceController workspaceController,
+        CodingAgent codingAgent)
     {
+        ArgumentNullException.ThrowIfNull(chatManager);
+        ArgumentNullException.ThrowIfNull(sessionStore);
+        ArgumentNullException.ThrowIfNull(chatRunner);
         ArgumentNullException.ThrowIfNull(workspaceController);
+        ArgumentNullException.ThrowIfNull(codingAgent);
+        _chatManager = chatManager;
+        _sessionStore = sessionStore;
+        _chatRunner = chatRunner;
         _workspaceController = workspaceController;
+        _codingAgent = codingAgent;
+        AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
     }
 
     public event EventHandler? StateChanged;
@@ -66,7 +53,7 @@ internal sealed class CodingChatApplication
 
     public bool CanChangeSession => !HasActiveOperation;
 
-    public bool CanSend => _chatRunner is not null && !_isCompressionActive;
+    public bool CanSend => !_isCompressionActive;
 
     public bool CanCompressConversation => !HasActiveOperation
                                            && _chatManager.SelectedSession.AgentSession is not null;
@@ -199,8 +186,7 @@ internal sealed class CodingChatApplication
             throw new ArgumentException("消息内容不能为空。", nameof(contents));
         }
 
-        ICodingChatRunner chatRunner = _chatRunner
-                                       ?? throw new InvalidOperationException("编程代理运行器尚未初始化。");
+        ICodingChatRunner chatRunner = _chatRunner;
         if (_isCompressionActive)
         {
             throw new InvalidOperationException("对话压缩期间不能发送消息。");
@@ -225,7 +211,7 @@ internal sealed class CodingChatApplication
                 .RunAsync
                 (
                     runContents,
-                    _workspaceController?.NextRunWorkspacePath,
+                    _workspaceController.NextRunWorkspacePath,
                     enableAutomaticCompression,
                     runCancellationTokenSource.Token
                 );
@@ -333,6 +319,8 @@ internal sealed class CodingChatApplication
     {
         _activeRunCancellationTokenSource?.Cancel();
     }
+
+    public Task<bool> StopLanguageServerAsync() => _codingAgent.StopLanguageServerAsync();
 
     private void AddOrUpdateSummary(CopilotChatSession session, bool insertAtTop)
     {

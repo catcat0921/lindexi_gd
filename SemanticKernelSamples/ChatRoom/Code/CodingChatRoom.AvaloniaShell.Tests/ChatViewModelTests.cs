@@ -137,7 +137,7 @@ public sealed class ChatViewModelTests
     public async Task SwitchingSessionShouldUnsubscribePreviousMessageCollection()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore());
         await application.InitializeAsync();
         CopilotChatSession previousSession = manager.SelectedSession;
         await previousSession.AddMessageAsync(new CopilotChatMessage(ChatRole.User, "旧会话问题"));
@@ -167,7 +167,7 @@ public sealed class ChatViewModelTests
         manager.AgentApiEndpointManager.RegisterLanguageModelProvider(
             new FakeLanguageModelProvider([firstModel, secondModel]));
         manager.AgentApiEndpointManager.PrimaryModel = firstModel;
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore());
         using var viewModel = new ChatViewModel(manager, application, "当前模型：fake/First");
 
         viewModel.SelectedModel = viewModel.AvailableModels[1];
@@ -181,7 +181,7 @@ public sealed class ChatViewModelTests
     public void ApprovalActionsShouldDelegateToChatManager()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore());
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
         var approvedItem = new CopilotChatApprovalToolItem("approved", "write_file", "path=a.cs");
         var rejectedItem = new CopilotChatApprovalToolItem("rejected", "delete_file", "path=b.cs");
@@ -193,13 +193,34 @@ public sealed class ChatViewModelTests
         Assert.AreEqual(CopilotToolApprovalState.Rejected, rejectedItem.ApprovalState);
     }
 
+    [TestMethod(DisplayName = "空闲时停止 LSP 命令应可用并处理无活动服务")]
+    public async Task StopLanguageServerCommandWhenIdleShouldHandleMissingService()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new ImmediateRunner(manager);
+        await using var agent = new CodingAgent();
+        var application = new CodingChatApplication(
+            manager,
+            new EmptySessionStore(),
+            runner,
+            new CodingWorkspaceController(new ImmediateMainThreadDispatcher()),
+            agent);
+        using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
+
+        Assert.IsTrue(viewModel.StopLanguageServerCommand.CanExecute(null));
+        viewModel.StopLanguageServerCommand.Execute(null);
+        await WaitUntilAsync(() => viewModel.StatusText == "当前没有正在运行的 LSP 服务");
+
+        Assert.IsTrue(viewModel.Messages[^1].IsSystemMessage);
+    }
+
     [TestMethod(DisplayName = "输入有效消息时发送命令应运行并清空输入")]
     [Timeout(5000)]
     public async Task SendCommandShouldRunAndClearInput()
     {
         var manager = new CopilotChatManager();
         var runner = new ImmediateRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -219,7 +240,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new CancelableRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -230,6 +251,7 @@ public sealed class ChatViewModelTests
         viewModel.InputText = "改为优先修复测试";
 
         Assert.AreEqual("插话", viewModel.SendButtonText);
+        Assert.IsFalse(viewModel.StopLanguageServerCommand.CanExecute(null));
         Assert.IsTrue(viewModel.SendCommand.CanExecute(null));
         viewModel.SendCommand.Execute(null);
         await runner.Injected.Task;
@@ -247,7 +269,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new CancelableRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -274,7 +296,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new CompletingRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -300,7 +322,7 @@ public sealed class ChatViewModelTests
     public void LoopIterationShouldRequireTextPrompt()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), new ImmediateRunner(manager));
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), new ImmediateRunner(manager));
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
         Assert.IsTrue(viewModel.TryAddImageAttachment("sample.png", new byte[] { 1, 2, 3 }));
 
@@ -315,7 +337,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new ImmediateRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
         Assert.IsTrue(viewModel.TryAddImageAttachment("sample.png", new byte[] { 1, 2, 3 }));
@@ -348,7 +370,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new FailingRunner(new InvalidOperationException("模型失败"));
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -370,7 +392,7 @@ public sealed class ChatViewModelTests
     {
         var manager = new CopilotChatManager();
         var runner = new CancelableRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -399,7 +421,7 @@ public sealed class ChatViewModelTests
         AgentSession agentSession = await context.GetAgentSessionAsync();
         manager.SelectedSession.SetAgentSession(null);
         var runner = new ImmediateRunner(manager);
-        var application = new CodingChatApplication(manager, new EmptySessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore(), runner);
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型")
         {
@@ -438,7 +460,7 @@ public sealed class ChatViewModelTests
             new ChatMessage(ChatRole.User, "用户问题"),
             new ChatMessage(ChatRole.Assistant, "助手回答"),
         ]);
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new EmptySessionStore());
         await application.InitializeAsync();
         using var viewModel = new ChatViewModel(manager, application, "当前模型：测试模型");
 
@@ -457,9 +479,12 @@ public sealed class ChatViewModelTests
     {
         string workspacePath = CreateTestDirectory();
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
-        await application.InitializeAsync();
         var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
+        var application = CodingChatApplicationTestFactory.CreateApplication(
+            manager,
+            new EmptySessionStore(),
+            workspaceController: workspaceController);
+        await application.InitializeAsync();
         using var viewModel = new ChatViewModel(
             manager,
             application,
@@ -483,9 +508,12 @@ public sealed class ChatViewModelTests
     {
         string missingPath = Path.Join(Path.GetTempPath(), $"CodingChatRoom.MissingWorkspace.{Guid.NewGuid():N}");
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new EmptySessionStore());
-        await application.InitializeAsync();
         var workspaceController = new CodingWorkspaceController(new ImmediateMainThreadDispatcher());
+        var application = CodingChatApplicationTestFactory.CreateApplication(
+            manager,
+            new EmptySessionStore(),
+            workspaceController: workspaceController);
+        await application.InitializeAsync();
         using var viewModel = new ChatViewModel(
             manager,
             application,

@@ -325,6 +325,7 @@
                     <Button x:Name="StopLanguageServerButton"
                             Padding="12,6"
                             Content="{StaticResource StopLanguageServerText}"
+                            Command="{Binding StopLanguageServerCommand}"
                             ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
                     <CheckBox x:Name="EnableDotNetRunCheckBox"
                               VerticalAlignment="Center"
