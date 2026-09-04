@@ -57,15 +57,20 @@ internal sealed class CodingWorkspaceCache : IAsyncDisposable
     public ToolRegistrationRegistry ToolRegistrationRegistry { get; }
 
     public CodingRunWorkspaceContext CreateRunContext(
-        IReadOnlyList<ToolRegistration> additionalToolRegistrations)
+        IReadOnlyList<ToolRegistration> additionalToolRegistrations,
+        bool enableDotNetRun = false)
     {
         ArgumentNullException.ThrowIfNull(additionalToolRegistrations);
-        if (additionalToolRegistrations.Count == 0)
+        ToolRegistration[] optionalRegistrations = enableDotNetRun
+            ? [DotNetCliTools!.CreateRunToolRegistration()]
+            : [];
+        if (additionalToolRegistrations.Count == 0 && optionalRegistrations.Length == 0)
         {
             return new CodingRunWorkspaceContext(WorkspacePath, Tools, ToolRegistrationRegistry);
         }
 
-        ToolRegistration[] registrations = [.. ToolRegistrations, .. additionalToolRegistrations];
+        ToolRegistration[] registrations =
+            [.. ToolRegistrations, .. optionalRegistrations, .. additionalToolRegistrations];
         AITool[] tools = [.. registrations.Select(static registration => registration.Tool)];
         return new CodingRunWorkspaceContext(
             WorkspacePath,

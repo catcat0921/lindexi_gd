@@ -330,7 +330,7 @@
                     <CheckBox x:Name="EnableDotNetRunCheckBox"
                               VerticalAlignment="Center"
                               Content="{StaticResource EnableDotNetRunText}"
-                              IsChecked="False"
+                              IsChecked="{Binding IsDotNetRunEnabled}"
                               ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
                 </StackPanel>
                 <ItemsControl Grid.Row="1"

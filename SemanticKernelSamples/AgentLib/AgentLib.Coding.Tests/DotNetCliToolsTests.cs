@@ -110,6 +110,52 @@ public sealed class DotNetCliToolsTests
         StringAssert.Contains(result, "命令行必须严格以 dotnet publish 开头");
     }
 
+    [TestMethod(DisplayName = "运行工具应使用 dotnet run 并返回退出码摘要")]
+    [Timeout(30000)]
+    public async Task RunDotNetRunAsync_WhenCommandIsValid_ReturnsExitCodeAndStoresLog()
+    {
+        string workspacePath = await CreateMinimalProjectAsync(isExecutable: true);
+        var tools = new DotNetCliTools(workspacePath);
+
+        string result = await tools.RunDotNetRunAsync("dotnet run --project Sample.csproj");
+        string log = tools.ReadLastLogLines(1, 10);
+
+        StringAssert.Contains(result, "退出码为 0");
+        StringAssert.Contains(log, "命令: dotnet run --project Sample.csproj");
+    }
+
+    [DataTestMethod(DisplayName = "运行工具应拒绝未严格以 dotnet run 开头的命令")]
+    [DataRow(" dotnet run --project Sample.csproj")]
+    [DataRow("Dotnet run --project Sample.csproj")]
+    [DataRow("dotnet runner Sample.csproj")]
+    [DataRow("dotnet run\n--project Sample.csproj")]
+    [Timeout(5000)]
+    public async Task RunDotNetRunAsync_WhenCommandPrefixIsInvalid_ReturnsValidationError(string commandLine)
+    {
+        string workspacePath = Path.Join(CreateTestDirectory(), "workspace");
+        Directory.CreateDirectory(workspacePath);
+        var tools = new DotNetCliTools(workspacePath);
+
+        string result = await tools.RunDotNetRunAsync(commandLine);
+
+        StringAssert.Contains(result, "命令行必须严格以 dotnet run 开头");
+    }
+
+    [DataTestMethod(DisplayName = "运行工具应拒绝无效的超时秒数")]
+    [DataRow(0)]
+    [DataRow(86401)]
+    [Timeout(5000)]
+    public async Task RunDotNetRunAsync_WhenTimeoutIsInvalid_ReturnsValidationError(int timeoutSeconds)
+    {
+        string workspacePath = Path.Join(CreateTestDirectory(), "workspace");
+        Directory.CreateDirectory(workspacePath);
+        var tools = new DotNetCliTools(workspacePath);
+
+        string result = await tools.RunDotNetRunAsync("dotnet run", timeoutSeconds);
+
+        StringAssert.Contains(result, "超时秒数必须在 1 到 86400 之间");
+    }
+
     [TestMethod(DisplayName = "测试工具应使用 dotnet test 测试指定项目")]
     [Timeout(30000)]
     public async Task RunTestsAsync_WhenProjectIsValid_ReturnsSuccessfulResult()
@@ -151,14 +197,22 @@ public sealed class DotNetCliToolsTests
         StringAssert.Contains(result, "返回行范围: 1-2");
     }
 
-    private static async Task<string> CreateMinimalProjectAsync(string projectName = "Sample")
+    private static async Task<string> CreateMinimalProjectAsync(
+        string projectName = "Sample",
+        bool isExecutable = false)
     {
         string workspacePath = Path.Join(CreateTestDirectory(), "workspace");
         Directory.CreateDirectory(workspacePath);
+        string executableProperties = isExecutable
+            ? $"<OutputType>Exe</OutputType><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><Compile Include=\"{projectName}.cs\" /></ItemGroup><PropertyGroup>"
+            : string.Empty;
         await File.WriteAllTextAsync(
             Path.Join(workspacePath, $"{projectName}.csproj"),
-            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net6.0</TargetFramework></PropertyGroup></Project>");
-        await File.WriteAllTextAsync(Path.Join(workspacePath, $"{projectName}.cs"), $"internal static class {projectName} {{ }}");
+            $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net6.0</TargetFramework>{executableProperties}</PropertyGroup></Project>");
+        string source = isExecutable
+            ? $"internal static class {projectName} {{ private static void Main() {{ }} }}"
+            : $"internal static class {projectName} {{ }}";
+        await File.WriteAllTextAsync(Path.Join(workspacePath, $"{projectName}.cs"), source);
         return workspacePath;
     }
 

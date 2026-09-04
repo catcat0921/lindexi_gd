@@ -17,6 +17,7 @@ internal interface ICodingChatRunner
         IReadOnlyList<AIContent> contents,
         string? workspacePath,
         bool enableAutomaticCompression,
+        bool enableDotNetRun,
         CancellationToken cancellationToken);
 
     Task InjectMessageAsync(
@@ -43,6 +44,7 @@ internal sealed class CodingAgentChatRunner : ICodingChatRunner
         IReadOnlyList<AIContent> contents,
         string? workspacePath,
         bool enableAutomaticCompression,
+        bool enableDotNetRun,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(contents);
@@ -55,7 +57,8 @@ internal sealed class CodingAgentChatRunner : ICodingChatRunner
                 contents,
                 workspacePath,
                 cancellationToken: cancellationToken,
-                enableAutomaticCompression: enableAutomaticCompression)
+                enableAutomaticCompression: enableAutomaticCompression,
+                enableDotNetRun: enableDotNetRun)
             .ConfigureAwait(false);
         _activeRun = run;
         return new CodingAgentRunResult(

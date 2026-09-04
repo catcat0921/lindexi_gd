@@ -72,6 +72,23 @@ public sealed class CodingChatSendingTests
         await sendTask;
     }
 
+    [TestMethod(DisplayName = "发送应允许为本次运行启用 dotnet run")]
+    [Timeout(5000)]
+    public async Task SendMessageAsyncShouldAllowEnablingDotNetRun()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new TestCodingChatRunner(manager);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
+        await application.InitializeAsync();
+
+        Task sendTask = application.SendMessageAsync("运行应用", enableDotNetRun: true);
+        await runner.Started.Task;
+
+        Assert.IsTrue(runner.ObservedDotNetRunEnabled);
+        runner.Complete("完成");
+        await sendTask;
+    }
+
     [TestMethod(DisplayName = "发送多模态内容时应保留文本图片顺序和类型")]
     [Timeout(5000)]
     public async Task SendMessageAsyncShouldPreserveMultimodalContentOrder()
@@ -301,6 +318,8 @@ public sealed class CodingChatSendingTests
 
         public bool ObservedAutomaticCompressionEnabled { get; private set; }
 
+        public bool ObservedDotNetRunEnabled { get; private set; }
+
         public IReadOnlyList<AIContent>? ObservedContents { get; private set; }
 
         public IReadOnlyList<AIContent>? InjectedContents { get; private set; }
@@ -311,6 +330,7 @@ public sealed class CodingChatSendingTests
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
             bool enableAutomaticCompression,
+            bool enableDotNetRun,
             CancellationToken cancellationToken)
         {
             RunCount++;
@@ -323,6 +343,7 @@ public sealed class CodingChatSendingTests
             ObservedContents = contents;
             ObservedWorkspacePath = workspacePath;
             ObservedAutomaticCompressionEnabled = enableAutomaticCompression;
+            ObservedDotNetRunEnabled = enableDotNetRun;
             ObservedCancellationToken = cancellationToken;
             var userMessage = CopilotChatMessage.CreateUser(contents);
             await manager.AppendMessageAsync(userMessage, cancellationToken);
