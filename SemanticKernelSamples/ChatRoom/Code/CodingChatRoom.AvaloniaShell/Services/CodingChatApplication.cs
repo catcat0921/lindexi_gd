@@ -25,12 +25,14 @@ internal sealed class CodingChatApplication
     private bool _isCompressionActive;
     private bool _isRunActive;
 
-    public CodingChatApplication(
+    public CodingChatApplication
+    (
         CopilotChatManager chatManager,
         ICodingChatSessionStore sessionStore,
         ICodingChatRunner chatRunner,
         CodingWorkspaceController workspaceController,
-        CodingAgent codingAgent)
+        CodingAgent codingAgent
+    )
     {
         ArgumentNullException.ThrowIfNull(chatManager);
         ArgumentNullException.ThrowIfNull(sessionStore);

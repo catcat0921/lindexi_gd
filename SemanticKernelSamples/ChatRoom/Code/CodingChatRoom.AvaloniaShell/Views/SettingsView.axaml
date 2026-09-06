@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:CodingChatRoom.AvaloniaShell.ViewModels"
+             xmlns:views="using:CodingChatRoom.AvaloniaShell.Views"
              x:Class="CodingChatRoom.AvaloniaShell.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
     <Grid RowDefinitions="Auto,*,Auto" Background="{StaticResource SettingsBackgroundBrush}">
@@ -289,6 +290,10 @@
                                                              PlaceholderText="输入访问密钥" />
                                                 </StackPanel>
                                             </Grid>
+
+                                            <Border Height="1" Background="{StaticResource SettingsCardBorderBrush}" />
+
+                                            <views:OpenAIModelCatalogView />
 
                                             <Border Height="1" Background="{StaticResource SettingsCardBorderBrush}" />
 
