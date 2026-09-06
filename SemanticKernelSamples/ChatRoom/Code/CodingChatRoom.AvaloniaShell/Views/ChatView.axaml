@@ -172,61 +172,59 @@
                 Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,*,Auto,220,120" RowDefinitions="Auto,Auto">
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           Margin="0,0,8,0"
-                           VerticalAlignment="Center"
-                           Text="工作路径"
-                           Foreground="{StaticResource TextPrimaryBrush}" />
-                <TextBox Grid.Row="0"
-                         Grid.Column="1"
-                         Classes="Rounded"
-                         Text="{Binding WorkspaceInput, UpdateSourceTrigger=PropertyChanged}"
-                         PlaceholderText="输入本地代码目录；留空后应用可清除工作区"
-                         IsEnabled="{Binding !IsChangingWorkspace}" />
-                <Button Grid.Row="0"
-                        Grid.Column="2"
-                        Classes="Primary"
-                        Margin="8,0,0,0"
-                        Content="应用"
-                        Command="{Binding ApplyWorkspaceCommand}"
-                        IsEnabled="{Binding CanApplyWorkspace}" />
-                <ComboBox x:Name="ModelSelector"
-                          Grid.Row="0"
-                          Grid.Column="3"
-                          Margin="8,0,0,0"
-                          ItemsSource="{Binding AvailableModels}"
-                          SelectedItem="{Binding SelectedModel}"
-                          IsEnabled="{Binding !IsRunning}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:LanguageModelOptionViewModel">
-                            <TextBlock Text="{Binding DisplayName}"
-                                       TextTrimming="CharacterEllipsis" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <ComboBox x:Name="ReasoningEffortSelector"
-                          Grid.Row="0"
-                          Grid.Column="4"
-                          Margin="8,0,0,0"
-                          ToolTip.Tip="{StaticResource ReasoningEffortToolTip}"
-                          ItemsSource="{Binding AvailableReasoningEfforts}"
-                          SelectedItem="{Binding SelectedReasoningEffort}"
-                          IsEnabled="{Binding !IsRunning}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ReasoningEffortOptionViewModel">
-                            <TextBlock Text="{Binding DisplayName}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBlock Grid.Row="1"
-                           Grid.Column="1"
-                           Grid.ColumnSpan="4"
-                           Margin="0,4,0,0"
-                           Classes="Subtitle"
-                           Text="{Binding WorkspaceStatusText}"
-                           TextTrimming="CharacterEllipsis" />
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8">
+                <Grid Grid.Column="0"
+                      ColumnDefinitions="*,Auto"
+                      ColumnSpacing="8">
+                    <TextBox Grid.Column="0"
+                             MinHeight="32"
+                             Classes="Rounded"
+                             ToolTip.Tip="{Binding WorkspaceStatusText}"
+                             Text="{Binding WorkspaceInput, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="输入本地代码目录；留空后应用可清除工作区"
+                             IsEnabled="{Binding !IsChangingWorkspace}" />
+                    <Button Grid.Column="1"
+                            MinWidth="72"
+                            MinHeight="32"
+                            Classes="Primary"
+                            Content="应用"
+                            Command="{Binding ApplyWorkspaceCommand}"
+                            IsEnabled="{Binding CanApplyWorkspace}" />
+                </Grid>
+
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                    <ComboBox x:Name="ModelSelector"
+                              Width="220"
+                              MinHeight="32"
+                              ToolTip.Tip="选择语言模型"
+                              ItemsSource="{Binding AvailableModels}"
+                              SelectedItem="{Binding SelectedModel}"
+                              IsEnabled="{Binding !IsRunning}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LanguageModelOptionViewModel">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <ComboBox x:Name="ReasoningEffortSelector"
+                              Width="96"
+                              MinHeight="32"
+                              ToolTip.Tip="{StaticResource ReasoningEffortToolTip}"
+                              ItemsSource="{Binding AvailableReasoningEfforts}"
+                              SelectedItem="{Binding SelectedReasoningEffort}"
+                              IsEnabled="{Binding !IsRunning}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ReasoningEffortOptionViewModel">
+                                <TextBlock Text="{Binding DisplayName}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -326,7 +324,7 @@
                 Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
                 <StackPanel Grid.Row="0"
                             Grid.Column="0"
                             Grid.ColumnSpan="7"
@@ -432,13 +430,6 @@
                         Margin="8,0,0,0"
                         Command="{Binding StopCommand}"
                         IsVisible="{Binding IsRunning}" />
-                <TextBlock Grid.Row="3"
-                           Grid.Column="1"
-                           Grid.ColumnSpan="5"
-                           Margin="8,6,0,0"
-                           Classes="Subtitle"
-                           Text="{Binding StatusText}"
-                           TextWrapping="Wrap" />
             </Grid>
         </Border>
     </Grid>

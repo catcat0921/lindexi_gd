@@ -6,6 +6,8 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 
+using CodingChatRoom.AvaloniaShell.Views;
+
 namespace CodingChatRoom.AvaloniaShell.Tests;
 
 [TestClass]
@@ -107,6 +109,37 @@ public sealed class ChatOutputVisualTests
     private static string GetScreenshotPath()
     {
         return Path.Combine(AppContext.BaseDirectory, "ChatOutputFocused.png");
+    }
+
+    [TestMethod]
+    public void ModelAndReasoningSelectorsShouldRemainAdjacent()
+    {
+        var chatView = new ChatView
+        {
+            DataContext = new ViewModels.ChatViewModel(),
+        };
+        var window = new Window
+        {
+            Width = 1150,
+            Height = 700,
+            Content = chatView,
+        };
+
+        window.Show();
+
+        ComboBox modelSelector = chatView.FindControl<ComboBox>("ModelSelector")
+            ?? throw new InvalidOperationException("未找到模型选择器。");
+        ComboBox reasoningSelector = chatView.FindControl<ComboBox>("ReasoningEffortSelector")
+            ?? throw new InvalidOperationException("未找到思考强度选择器。");
+        Point modelOrigin = modelSelector.TranslatePoint(default, window)
+            ?? throw new InvalidOperationException("无法获取模型选择器坐标。");
+        Point reasoningOrigin = reasoningSelector.TranslatePoint(default, window)
+            ?? throw new InvalidOperationException("无法获取思考强度选择器坐标。");
+        double horizontalGap = reasoningOrigin.X - (modelOrigin.X + modelSelector.Bounds.Width);
+
+        Assert.AreEqual(8, horizontalGap, 0.5);
+
+        window.Close();
     }
 
     [TestMethod]
