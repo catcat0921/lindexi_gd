@@ -19,14 +19,16 @@ public partial class OpenAIModelCatalogView : UserControl
         InitializeComponent();
     }
 
-    private async void OnLoadClick(object? sender, RoutedEventArgs e)
+    public async void LoadModels(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not ProviderSettingsViewModel provider)
+        if (DataContext is not ProviderSettingsViewModel provider || sender is not Button button)
         {
             return;
         }
 
-        LoadButton.IsEnabled = false;
+        button.IsEnabled = false;
+        CatalogPanel.IsVisible = true;
+        ModelsList.IsVisible = false;
         ShowStatus("正在获取模型列表…", isError: false);
         try
         {
@@ -34,16 +36,18 @@ public partial class OpenAIModelCatalogView : UserControl
             if (!result.IsSuccessful)
             {
                 ModelsList.ItemsSource = null;
-                ShowStatus(result.Message, isError: true);
+                ShowStatus(result.ErrorMessage!, isError: true);
                 return;
             }
 
             ModelsList.ItemsSource = result.ModelIds;
-            ShowStatus(result.Message, isError: false);
+            ModelsList.IsVisible = result.ModelIds.Count > 0;
+            StatusText.IsVisible = result.ModelIds.Count == 0;
+            StatusText.Text = result.ModelIds.Count == 0 ? "没有可导入的模型。" : null;
         }
         finally
         {
-            LoadButton.IsEnabled = true;
+            button.IsEnabled = true;
         }
     }
 
@@ -73,8 +77,6 @@ public partial class OpenAIModelCatalogView : UserControl
         {
             modelItem.IsVisible = false;
         }
-
-        ShowStatus($"已添加模型 {modelId}。", isError: false);
     }
 
     private void OnModelItemLoaded(object? sender, RoutedEventArgs e)

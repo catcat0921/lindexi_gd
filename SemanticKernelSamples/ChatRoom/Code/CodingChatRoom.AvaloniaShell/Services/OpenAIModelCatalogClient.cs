@@ -2,28 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-
 using OpenAI;
 using OpenAI.Models;
-
 using System.ClientModel;
 
 namespace CodingChatRoom.AvaloniaShell.Services;
 
 internal interface IOpenAIModelCatalogClient
 {
-    Task<OpenAIModelCatalogResult> GetModelIdsAsync(
+    Task<OpenAIModelCatalogResult> GetModelIdsAsync
+    (
         string endPoint,
         string apiKey,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }
 
-internal sealed record OpenAIModelCatalogResult(IReadOnlyList<string> ModelIds, bool IsSuccessful, string Message)
+internal sealed record OpenAIModelCatalogResult(IReadOnlyList<string> ModelIds, string? ErrorMessage)
 {
-    public static OpenAIModelCatalogResult Success(IReadOnlyList<string> modelIds)
-        => new(modelIds, true, modelIds.Count == 0 ? "服务未返回可用模型。" : $"已获取 {modelIds.Count} 个模型。");
+    public bool IsSuccessful => ErrorMessage is null;
 
-    public static OpenAIModelCatalogResult Failure(string message) => new([], false, message);
+    public static OpenAIModelCatalogResult Success(IReadOnlyList<string> modelIds) => new(modelIds, null);
+
+    public static OpenAIModelCatalogResult Failure(string message) => new([], message);
 }
 
 internal sealed class OpenAIModelCatalogClient : IOpenAIModelCatalogClient

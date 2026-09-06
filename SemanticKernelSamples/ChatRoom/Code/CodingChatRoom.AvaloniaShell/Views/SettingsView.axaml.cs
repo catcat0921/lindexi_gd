@@ -4,6 +4,7 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 
 using CodingChatRoom.AvaloniaShell.ViewModels;
 
@@ -28,6 +29,15 @@ public partial class SettingsView : UserControl
             && viewModel.TestWindowsSandboxConnectionCommand.CanExecute(null))
         {
             viewModel.TestWindowsSandboxConnectionCommand.Execute(null);
+        }
+    }
+
+    private void OnImportModelsClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button
+            && button.FindAncestorOfType<Border>()?.FindDescendantOfType<OpenAIModelCatalogView>() is { } catalogView)
+        {
+            catalogView.LoadModels(button, e);
         }
     }
 

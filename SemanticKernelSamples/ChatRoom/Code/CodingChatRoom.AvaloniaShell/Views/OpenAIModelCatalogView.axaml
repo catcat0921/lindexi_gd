@@ -3,49 +3,40 @@
              xmlns:vm="using:CodingChatRoom.AvaloniaShell.ViewModels"
              x:Class="CodingChatRoom.AvaloniaShell.Views.OpenAIModelCatalogView"
              x:DataType="vm:ProviderSettingsViewModel">
-    <StackPanel Spacing="10">
-        <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Spacing="2">
-                <TextBlock Text="服务模型列表" FontSize="14" FontWeight="SemiBold" />
-                <TextBlock Text="从 OpenAI 兼容接口获取模型，点击添加到下方配置。" Classes="SettingsHint" />
-            </StackPanel>
-            <Button x:Name="LoadButton"
-                    Grid.Column="1"
-                    Classes="Flat"
-                    Content="获取模型列表"
-                    Click="OnLoadClick"
-                    VerticalAlignment="Center" />
-        </Grid>
-
+    <StackPanel x:Name="CatalogPanel" Spacing="8" IsVisible="False">
         <TextBlock x:Name="StatusText"
                    Classes="SettingsHint"
                    IsVisible="False"
                    TextWrapping="Wrap" />
 
-        <ItemsControl x:Name="ModelsList">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="x:String">
-                    <Border Classes="AvailableModelCard"
-                            Padding="10,7"
-                            Margin="0,0,8,8"
-                            Loaded="OnModelItemLoaded">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                            <TextBlock Text="{Binding}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="1"
-                                    Classes="Flat"
-                                    Content="＋ 添加"
-                                    Click="OnAddClick" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <ScrollViewer MaxHeight="240"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="ModelsList">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <Border Classes="AvailableModelItem"
+                                Margin="0,0,8,8"
+                                Loaded="OnModelItemLoaded">
+                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Text="{Binding}"
+                                           MaxWidth="260"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="1"
+                                        Classes="Flat CompactModelAdd"
+                                        Content="添加"
+                                        Click="OnAddClick" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
     </StackPanel>
 </UserControl>

@@ -293,11 +293,7 @@
 
                                             <Border Height="1" Background="{StaticResource SettingsCardBorderBrush}" />
 
-                                            <views:OpenAIModelCatalogView />
-
-                                            <Border Height="1" Background="{StaticResource SettingsCardBorderBrush}" />
-
-                                            <Grid ColumnDefinitions="*,Auto">
+                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                                                 <StackPanel Spacing="2">
                                                     <TextBlock Text="可用模型" FontSize="14" FontWeight="SemiBold" />
                                                     <TextBlock Text="定义模型标识、Token 限制与能力。" Classes="SettingsHint" />
@@ -307,7 +303,14 @@
                                                         Content="＋ 添加模型"
                                                         Command="{Binding AddModelCommand}"
                                                         VerticalAlignment="Center" />
+                                                <Button Grid.Column="2"
+                                                        Classes="Flat"
+                                                        Content="从服务导入"
+                                                        Click="OnImportModelsClick"
+                                                        VerticalAlignment="Center" />
                                             </Grid>
+
+                                            <views:OpenAIModelCatalogView Margin="0,2,0,6" />
 
                                             <ItemsControl ItemsSource="{Binding Models}">
                                                 <ItemsControl.ItemTemplate>
