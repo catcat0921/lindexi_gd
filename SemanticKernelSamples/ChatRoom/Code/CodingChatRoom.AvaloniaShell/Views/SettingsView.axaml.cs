@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 
 using CodingChatRoom.AvaloniaShell.ViewModels;
@@ -54,5 +55,17 @@ public partial class SettingsView : UserControl
         {
             // 忽略
         }
+    }
+
+    private async void OnCopyLanguageServerInstallCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        var dataTransfer = new DataTransfer();
+        dataTransfer.Add(DataTransferItem.CreateText("dotnet tool update -g roslyn-language-server"));
+        await clipboard.SetDataAsync(dataTransfer);
     }
 }

@@ -19,6 +19,8 @@
         <sys:String x:Key="LanguageServerSettingsTitle">LSP 编程服务</sys:String>
         <sys:String x:Key="LanguageServerSettingsDescription">安装或更新代码符号查询所需的 Roslyn Language Server。</sys:String>
         <sys:String x:Key="InstallOrUpdateLanguageServerText">安装或更新 LSP</sys:String>
+        <sys:String x:Key="CopyLanguageServerInstallCommandText">复制命令</sys:String>
+        <sys:String x:Key="CopyLanguageServerInstallCommandToolTip">复制安装或更新 LSP 的控制台命令</sys:String>
         <sys:String x:Key="LanguageServerInstallHint">直接执行 dotnet tool update -g roslyn-language-server。</sys:String>
         <sys:String x:Key="EnableDotNetRunText">启用 dotnet run</sys:String>
         <sys:String x:Key="EnableDotNetRunToolTip">下一次新对话运行时包含 dotnet run 工具；当前正在进行的运行不受影响</sys:String>
