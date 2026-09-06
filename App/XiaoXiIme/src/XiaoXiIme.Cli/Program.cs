@@ -1,5 +1,6 @@
 using DotNetCampus.Cli;
 using XiaoXiIme.Cli;
+using XiaoXiIme.ImeIpc;
 
 if (args.Length == 0)
 {
@@ -15,6 +16,11 @@ return await CommandLine.Parse(args)
     .AddHandler<PayloadBuildOptions>(options => IntegrationPayloadBuilder.BuildAsync(options, Console.Out, Console.Error))
     .AddHandler<IntegrationRunOptions>(options => IntegrationTestRunner.RunAsync(options, Console.Out, Console.Error, static () => new WindowsImeInstaller()))
     .AddHandler<NativeImeLoadProbeOptions>(options => NativeImeLoadProbe.Run(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryUpdateOptions>(options => LocalDictionaryCommands.Update(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryRollbackOptions>(options => LocalDictionaryCommands.Rollback(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryConvertSeWzcOptions>(options => LocalDictionaryCommands.ConvertSeWzc(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryBuildPackagesOptions>(options => LocalDictionaryCommands.BuildPackages(options, Console.Out, Console.Error))
+    .AddHandler<DictionaryInspectOptions>(options => LocalDictionaryCommands.Inspect(options, Console.Out, Console.Error))
     .RunAsync();
 
 static int Install(InstallOptions options)
@@ -51,7 +57,14 @@ static int Install(InstallOptions options)
     var x86ImePath = Path.GetFullPath(Path.Combine(root, x86Components.ImeFile.Replace('/', Path.DirectorySeparatorChar)));
     var result = new WindowsImeInstaller().InstallPair(x64ImePath, x86ImePath, "XiaoXi IME");
     (result.Succeeded ? Console.Out : Console.Error).WriteLine(result.Message);
-    return result.Succeeded ? 0 : 6;
+    if (!result.Succeeded)
+    {
+        return 6;
+    }
+
+    var hostStart = ImeHostProcessManager.StartDetached(Path.Combine(root, manifest.ImeHostExecutable.Replace('/', Path.DirectorySeparatorChar)));
+    (hostStart.Succeeded ? Console.Out : Console.Error).WriteLine(hostStart.Message);
+    return hostStart.Succeeded ? 0 : 7;
 }
 
 static int Uninstall(UninstallOptions options)
@@ -62,8 +75,14 @@ static int Uninstall(UninstallOptions options)
         return 3;
     }
 
+    ImeHostProcessManager.StopExisting(XiaoXiImeIpcOptions.DefaultServerName);
     var result = new WindowsImeInstaller().UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");
     (result.Succeeded ? Console.Out : Console.Error).WriteLine(result.Message);
+    if (result.Succeeded)
+    {
+        Console.Out.WriteLine(UserDictionaryUninstall.Complete(options.PurgeUserData));
+    }
+
     return result.Succeeded ? 0 : 6;
 }
 

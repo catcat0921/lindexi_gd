@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using XiaoXiIme.Dictionary;
 
 namespace XiaoXiIme.Cli;
 
@@ -150,6 +151,30 @@ internal static class IntegrationTestRunner
                 return await CompleteAsync(13, reportPath, results, log, installer, installed, keepInstalled: false);
             }
 
+            using var hostProcess = new ImeHostProcessManager();
+            var hostStart = hostProcess.Start(Resolve(root, manifest.ImeHostExecutable));
+            results.Add(new IntegrationStageResult(
+                "start-ime-host",
+                hostStart.Succeeded,
+                hostStart.Succeeded ? 0 : 1,
+                hostStart.Message,
+                "",
+                "",
+                new
+                {
+                    hostStart.ExecutablePath,
+                    hostStart.ProcessId,
+                    hostStart.HostStatus?.IsRunning,
+                    hostStart.HostStatus?.IsUsingFallbackDictionary,
+                    hostStart.HostStatus?.DictionaryInputScheme,
+                    hostStart.HostStatus?.DictionaryLoadError,
+                }));
+            LogResult(log, results[^1]);
+            if (!hostStart.Succeeded)
+            {
+                return await CompleteAsync(16, reportPath, results, log, installer, installed, keepInstalled: false);
+            }
+
             var commands = new List<SystemTestCommand>();
             if (!options.SkipTsf)
             {
@@ -179,6 +204,7 @@ internal static class IntegrationTestRunner
         }
         catch
         {
+            ImeHostProcessManager.StopExisting();
             if (installed)
             {
                 installer.UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");
@@ -237,6 +263,65 @@ internal static class IntegrationTestRunner
                 return $"Payload file verification failed: {file.Path}.";
             }
         }
+
+        return VerifyDictionaryPackages(root);
+    }
+
+    internal static string? VerifyDictionaryPackages(string root)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        return VerifyHostDictionaryPackages(Path.Combine(root, "app", "host"));
+    }
+
+    internal static string? VerifyHostDictionaryPackages(string hostDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostDirectory);
+
+        var packages = new[]
+        {
+            Path.Combine(hostDirectory, DictionaryPackageLocations.GetRelativePackageDirectory(DictionaryPackageLocations.FullPinyinInputScheme)),
+            Path.Combine(hostDirectory, DictionaryPackageLocations.GetRelativePackageDirectory(DictionaryPackageLocations.XiaoheDoublePinyinInputScheme)),
+        };
+        var expectedSchemes = new[]
+        {
+            DictionaryPackageLocations.FullPinyinInputScheme,
+            DictionaryPackageLocations.XiaoheDoublePinyinInputScheme,
+        };
+        for (var index = 0; index < packages.Length; index++)
+        {
+            var packageDirectory = packages[index];
+            var expectedScheme = expectedSchemes[index];
+            try
+            {
+                var dictionary = DictionaryPackageLoader.Load(packageDirectory);
+                if (!string.Equals(dictionary.InputScheme, expectedScheme, StringComparison.Ordinal))
+                {
+                    return $"Dictionary package verification failed: {packageDirectory}. Expected input scheme '{expectedScheme}' but found '{dictionary.InputScheme}'.";
+                }
+
+                var probes = string.Equals(expectedScheme, DictionaryPackageLocations.XiaoheDoublePinyinInputScheme, StringComparison.Ordinal)
+                    ? new[] { ("nihc", "你好"), ("xnxiaimuyi", "XiaoXiIme") }
+                    : new[] { ("nihao", "你好"), ("xiaoxiaimuyi", "XiaoXiIme") };
+                foreach (var (probe, expectedText) in probes)
+                {
+                    var candidates = dictionary.Query(new ImeDictionaryQuery(probe));
+                    if (candidates.Count == 0)
+                    {
+                        return $"Dictionary package verification failed: {packageDirectory}. Expected '{probe}' to return candidates for input scheme '{expectedScheme}'.";
+                    }
+
+                    if (!string.Equals(candidates[0].Text, expectedText, StringComparison.Ordinal))
+                    {
+                        return $"Dictionary package verification failed: {packageDirectory}. Expected '{probe}' to return '{expectedText}' for input scheme '{expectedScheme}', but found '{candidates[0].Text}'.";
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or DictionaryPackageException)
+            {
+                return $"Dictionary package verification failed: {packageDirectory}. {exception.Message}";
+            }
+        }
+
         return null;
     }
 
@@ -348,6 +433,7 @@ internal static class IntegrationTestRunner
         bool keepInstalled)
     {
         var cleanupSucceeded = true;
+        ImeHostProcessManager.StopExisting();
         if (installed && !keepInstalled)
         {
             var cleanup = installer.UninstallExisting("XiaoXi IME", "XiaoXiIme.ime");

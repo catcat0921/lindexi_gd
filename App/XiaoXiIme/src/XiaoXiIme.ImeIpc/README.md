@@ -1,4 +1,4 @@
-﻿# XiaoXiIme.ImeIpc
+# XiaoXiIme.ImeIpc
 
 小希输入法 IPC 封装项目。
 
@@ -120,7 +120,7 @@ Windows 调用 ImeToAsciiEx
 - 没有把 `Hwnd` 或 `HWndIme` 放入任何 IPC 请求。
 - `ImeToAsciiEx` 构造 `TRANSMSG` 时没有读取 `InputContext.Hwnd`，消息中的 `Hwnd` 当前为默认值 `0`。
 
-如果 Host 或独立 UI 需要区分多个应用窗口、输入框或输入会话，现有 `ImeProcessKeyRequest(ImeKey Key)` 不够，需要增加会话标识和目标窗口上下文。不要只依赖裸 `HWND` 作为跨进程长期身份，因为窗口句柄可能被复用。
+`ImeProcessKeyRequest`、`ImeSnapshotRequest` 和 `ImeUiStateRequest` 现已携带 `ImeSessionId`。`ImeSessionId.FromHimc` 把进程内 HIMC 映射为 `himc:<hex>` 稳定标识，不发送可解引用指针。空会话标识表示查询宿主最近活动会话，而不是新建或强制使用 `default` 会话。AOT JSON 源生成上下文通过公开的 `ImeSessionIdJsonConverter` 把该值写成字符串或 `null`，并通过公开的 `JsonCamelCaseStringEnumConverter` 把枚举写成 camelCase 字符串，例如 `candidateSelection` 与 `reverseConversion`。不要只依赖裸 `HWND` 作为跨进程长期身份，因为窗口句柄可能被复用。
 
 ### 候选窗口的位置
 
@@ -138,10 +138,14 @@ IPC 使用 JSON 直接路由，请求和响应均为强类型对象；JSON 属�
 
 | 路由 | 请求 | 响应 | 作用 |
 | --- | --- | --- | --- |
-| `XiaoXiIme.ProcessKey` | `ImeProcessKeyRequest` | `ImeProcessKeyResponse` | 发送一个语义化 `ImeKey`，由 Host 更新输入法状态并返回 `ImeProcessResult`。这是 Win32 按键处理主链路。 |
-| `XiaoXiIme.GetSnapshot` | `ImeSnapshotRequest` | `ImeSnapshotResponse` | 获取当前完整 `ImeSessionSnapshot`，用于状态恢复、查询或测试。 |
-| `XiaoXiIme.GetUiState` | `ImeUiStateRequest` | `ImeUiStateResponse` | 获取适合候选 UI 展示的状态。默认由 Snapshot 转换而来。 |
+| `XiaoXiIme.ProcessKey` | `ImeProcessKeyRequest` | `ImeProcessKeyResponse` | 发送一个语义化 `ImeKey` 和会话标识，由 Host 更新对应 `ImeContext` 并返回 `ImeProcessResult`。这是 Win32 按键处理主链路。 |
+| `XiaoXiIme.GetSnapshot` | `ImeSnapshotRequest` | `ImeSnapshotResponse` | 获取指定会话的完整 `ImeSessionSnapshot`。空会话标识回退到宿主最近活动会话，供状态恢复、查询或测试。 |
+| `XiaoXiIme.GetUiState` | `ImeUiStateRequest` | `ImeUiStateResponse` | 获取指定会话适合候选 UI 展示的状态。空会话标识同样回退到最近活动会话。 |
 | `XiaoXiIme.GetHostStatus` | `ImeHostStatusRequest` | `ImeHostStatusResponse` | 健康检查，返回 Host 是否运行及最近错误。 |
+| `XiaoXiIme.ResetSession` | `ImeResetSessionRequest` | `ImeResetSessionResponse` | 删除指定会话或全部会话。 |
+| `XiaoXiIme.SetComposition` | `ImeSetCompositionRequest` | `ImeSetCompositionResponse` | 整串替换或清空组合，不自动提交缩写。 |
+| `XiaoXiIme.QueryConversionList` | `ImeConversionListRequest` | `ImeConversionListResponse` | 按源串独立查询候选，或按 `ImeConversionListKind.ReverseConversion` 反查 reading；IMM `GCL_REVERSELENGTH` 只取该反查缓冲所需字节数。不改变会话组合，也不更新最近活动会话。 |
+| `XiaoXiIme.RegisterWord` | `ImeRegisterWordRequest` | `ImeRegisterWordResponse` | 注册、注销或枚举共享用户词典，不改变会话组合。 |
 
 ### Host/UI 方向的通知
 
@@ -217,11 +221,10 @@ Win32 应用最终接收的是 IMM 输入上下文数据与 `WM_IME_*` 消息的
 
 ## 当前实现边界与后续建议
 
-当前 IPC 足以支持单一逻辑输入会话的按键处理和状态返回，但尚未完整表达 Win32 输入上下文。若要支持真实桌面环境中的多窗口、多输入框和独立候选 UI，建议后续扩展：
+当前 IPC 已按 `ImeSessionId` 隔离组合状态：Host 为每个会话维护独立 `ImeContext`，空的 `GetSnapshot`/`GetUiState` 回退到最近活动会话。`ImeProcessKeyRequest` 已覆盖 `ImeKey.SelectCandidate` 的 AOT JSON 往返，枚举值为 camelCase 的 `candidateSelection`。`XiaoXiIme.ResetSession` 使用 `ImeResetSessionRequest`/`ImeResetSessionResponse` 删除指定会话或全部会话，并已纳入 AOT JSON 源生成。`XiaoXiIme.SetComposition` 使用 `ImeSetCompositionRequest`/`ImeSetCompositionResponse` 整串替换或清空组合，不自动提交缩写，并同样纳入 AOT JSON 源生成。`XiaoXiIme.QueryConversionList` 使用 `ImeConversionListRequest`/`ImeConversionListResponse` 独立查询候选或反查 reading，不改变会话组合，也不更新最近活动会话。`XiaoXiIme.RegisterWord` 使用 `ImeRegisterWordRequest`/`ImeRegisterWordResponse` 注册、注销或枚举共享用户词典，并已纳入 AOT JSON 源生成。`ImeConfigure(IME_CONFIG_REGISTERWORD)` 经同一 IPC 路由写入用户词典。Win32 输入目标窗口、候选锚点和修饰键上下文仍未完整表达。若要支持真实桌面环境中的多窗口、多输入框和独立候选 UI，建议后续扩展：
 
-1. 为请求增加稳定的输入会话标识，并携带当前进程、线程和目标 `HWND` 等诊断上下文。
+1. 在现有会话标识上继续携带当前进程、线程和目标 `HWND` 等诊断上下文。
 2. 增加候选窗锚点结构，至少包含屏幕坐标、坐标系、目标窗口和有效性。
 3. 明确传递修饰键、按键动作和重复信息，而不是把 `scanCode` 当作未使用的 `modifiers`。
 4. 实现 `SnapshotChanged` 的发布与订阅，让 UI 使用推送状态。
 5. 在构造 `TRANSMSG` 时确认并填入正确的目标 `Hwnd`，同时保留 `HIMC` 作为 Win32 上下文写回边界。
-6. 如果未来存在并发输入会话，Host 不应继续只维护一个全局 `ImeContext`，而应按会话隔离 composition 和候选状态。

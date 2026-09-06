@@ -4,12 +4,10 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
 using AgentLib;
 using AgentLib.Coding;
 using AgentLib.Logging;
 using AgentLib.Model;
-
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -19,41 +17,32 @@ internal sealed class CodingChatApplication
 {
     private readonly CopilotChatManager _chatManager;
     private readonly ICodingChatSessionStore _sessionStore;
-    private readonly ICodingChatRunner? _chatRunner;
-    private readonly CodingWorkspaceController? _workspaceController;
+    private readonly ICodingChatRunner _chatRunner;
+    private readonly CodingWorkspaceController _workspaceController;
+    private readonly CodingAgent _codingAgent;
     private CancellationTokenSource? _activeRunCancellationTokenSource;
     private volatile bool _isLoopIterationEnabled;
     private bool _isCompressionActive;
     private bool _isRunActive;
 
-    public CodingChatApplication(CopilotChatManager chatManager, ICodingChatSessionStore sessionStore)
-    {
-        ArgumentNullException.ThrowIfNull(chatManager);
-        ArgumentNullException.ThrowIfNull(sessionStore);
-        _chatManager = chatManager;
-        _sessionStore = sessionStore;
-        AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
-    }
-
-    public CodingChatApplication(
-        CopilotChatManager chatManager,
-        ICodingChatSessionStore sessionStore,
-        ICodingChatRunner chatRunner)
-        : this(chatManager, sessionStore)
-    {
-        ArgumentNullException.ThrowIfNull(chatRunner);
-        _chatRunner = chatRunner;
-    }
-
     public CodingChatApplication(
         CopilotChatManager chatManager,
         ICodingChatSessionStore sessionStore,
         ICodingChatRunner chatRunner,
-        CodingWorkspaceController workspaceController)
-        : this(chatManager, sessionStore, chatRunner)
+        CodingWorkspaceController workspaceController,
+        CodingAgent codingAgent)
     {
+        ArgumentNullException.ThrowIfNull(chatManager);
+        ArgumentNullException.ThrowIfNull(sessionStore);
+        ArgumentNullException.ThrowIfNull(chatRunner);
         ArgumentNullException.ThrowIfNull(workspaceController);
+        ArgumentNullException.ThrowIfNull(codingAgent);
+        _chatManager = chatManager;
+        _sessionStore = sessionStore;
+        _chatRunner = chatRunner;
         _workspaceController = workspaceController;
+        _codingAgent = codingAgent;
+        AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
     }
 
     public event EventHandler? StateChanged;
@@ -64,10 +53,10 @@ internal sealed class CodingChatApplication
 
     public bool CanChangeSession => !HasActiveOperation;
 
-    public bool CanSend => _chatRunner is not null && !_isCompressionActive;
+    public bool CanSend => !_isCompressionActive;
 
     public bool CanCompressConversation => !HasActiveOperation
-        && _chatManager.SelectedSession.AgentSession is not null;
+                                           && _chatManager.SelectedSession.AgentSession is not null;
 
     public bool IsCompressionActive => _isCompressionActive;
 
@@ -85,8 +74,10 @@ internal sealed class CodingChatApplication
         AddSessionSummaries(summaries);
     }
 
-    internal Task<IReadOnlyList<CopilotChatSessionSummary>> LoadSessionSummariesAsync(
-        CancellationToken cancellationToken = default)
+    internal Task<IReadOnlyList<CopilotChatSessionSummary>> LoadSessionSummariesAsync
+    (
+        CancellationToken cancellationToken = default
+    )
         => _sessionStore.ListSessionsAsync(cancellationToken);
 
     internal void AddSessionSummaries(IReadOnlyList<CopilotChatSessionSummary> summaries)
@@ -155,6 +146,7 @@ internal sealed class CodingChatApplication
         {
             _chatManager.RemoveSession(session);
         }
+
         CopilotChatSessionSummary? summary = Sessions.FirstOrDefault(item => item.SessionId == sessionId);
         if (summary is not null)
         {
@@ -165,23 +157,33 @@ internal sealed class CodingChatApplication
         OnStateChanged();
     }
 
-    public async Task SendMessageAsync(
+    public async Task SendMessageAsync
+    (
         string prompt,
         bool enableAutomaticCompression = true,
-        CancellationToken cancellationToken = default)
+        bool enableDotNetRun = false,
+        CancellationToken cancellationToken = default
+    )
     {
         if (string.IsNullOrWhiteSpace(prompt))
         {
             throw new ArgumentException("消息内容不能为空。", nameof(prompt));
         }
 
-        await SendMessageAsync([new TextContent(prompt)], enableAutomaticCompression, cancellationToken);
+        await SendMessageAsync(
+            [new TextContent(prompt)],
+            enableAutomaticCompression,
+            enableDotNetRun,
+            cancellationToken);
     }
 
-    public async Task SendMessageAsync(
+    public async Task SendMessageAsync
+    (
         IReadOnlyList<AIContent> contents,
         bool enableAutomaticCompression = true,
-        CancellationToken cancellationToken = default)
+        bool enableDotNetRun = false,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(contents);
         var runContents = new List<AIContent>(contents);
@@ -190,8 +192,7 @@ internal sealed class CodingChatApplication
             throw new ArgumentException("消息内容不能为空。", nameof(contents));
         }
 
-        ICodingChatRunner chatRunner = _chatRunner
-            ?? throw new InvalidOperationException("编程代理运行器尚未初始化。");
+        ICodingChatRunner chatRunner = _chatRunner;
         if (_isCompressionActive)
         {
             throw new InvalidOperationException("对话压缩期间不能发送消息。");
@@ -203,7 +204,8 @@ internal sealed class CodingChatApplication
             return;
         }
 
-        CancellationTokenSource runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        CancellationTokenSource runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource
+            (cancellationToken);
         _activeRunCancellationTokenSource = runCancellationTokenSource;
         _isRunActive = true;
         OnStateChanged();
@@ -212,11 +214,14 @@ internal sealed class CodingChatApplication
         try
         {
             CodingAgentRunResult runResult = await chatRunner
-                .RunAsync(
+                .RunAsync
+                (
                     runContents,
-                    _workspaceController?.CommittedWorkspacePath,
+                    _workspaceController.NextRunWorkspacePath,
                     enableAutomaticCompression,
-                    runCancellationTokenSource.Token);
+                    enableDotNetRun,
+                    runCancellationTokenSource.Token
+                );
             await runResult.CompletionTask;
             if (ReferenceEquals(_activeRunCancellationTokenSource, runCancellationTokenSource))
             {
@@ -255,7 +260,10 @@ internal sealed class CodingChatApplication
         }
     }
 
-    public async Task RunLoopIterationAsync(string prompt, CancellationToken cancellationToken = default)
+    public async Task RunLoopIterationAsync(
+        string prompt,
+        bool enableAutomaticCompression,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(prompt))
         {
@@ -266,8 +274,14 @@ internal sealed class CodingChatApplication
         {
             try
             {
-                await SendMessageAsync(prompt, enableAutomaticCompression: true, cancellationToken);
-                await CompressConversationAsync(cancellationToken);
+                await SendMessageAsync(
+                    prompt,
+                    enableAutomaticCompression,
+                    cancellationToken: cancellationToken);
+                if (enableAutomaticCompression)
+                {
+                    await CompressConversationAsync(cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -321,6 +335,8 @@ internal sealed class CodingChatApplication
     {
         _activeRunCancellationTokenSource?.Cancel();
     }
+
+    public Task<bool> StopLanguageServerAsync() => _codingAgent.StopLanguageServerAsync();
 
     private void AddOrUpdateSummary(CopilotChatSession session, bool insertAtTop)
     {

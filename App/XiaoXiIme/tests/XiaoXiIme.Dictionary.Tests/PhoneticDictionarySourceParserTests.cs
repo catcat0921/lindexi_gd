@@ -35,6 +35,22 @@ public class PhoneticDictionarySourceParserTests
     }
 
     [Fact]
+    public void Parse_WhenReadingOmitsSyllableSpacesThenSplitsConcatenatedSyllables()
+    {
+        using var reader = CreateReader("均订\tjunding\t50");
+
+        var entries = PhoneticDictionarySourceParser.Parse(reader, "core.phonetic.tsv");
+
+        Assert.Equal("jun ding", Assert.Single(entries).Reading);
+    }
+
+    [Fact]
+    public void CanonicalizeReading_WhenReadingIsNullThenThrows()
+    {
+        Assert.Throws<ArgumentNullException>(() => PhoneticDictionarySourceParser.CanonicalizeReading(null!));
+    }
+
+    [Fact]
     public void Parse_WhenEntryIsDuplicatedThenUsesHighestFrequency()
     {
         using var reader = CreateReader("你\tni\t20\n你\tNI\t100\n你\tni\t80");

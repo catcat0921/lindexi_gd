@@ -7,32 +7,10 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using AgentLib;
-using AgentLib.Coding;
+
+using CodingChatRoom.AvaloniaShell.Infrastructure;
 
 namespace CodingChatRoom.AvaloniaShell.Services;
-
-internal interface ICodingWorkspaceRuntime
-{
-    Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync(
-        string? workspacePath,
-        CancellationToken cancellationToken);
-}
-
-internal sealed class CodingAgentWorkspaceRuntime : ICodingWorkspaceRuntime
-{
-    private readonly CodingAgent _codingAgent;
-
-    public CodingAgentWorkspaceRuntime(CodingAgent codingAgent)
-    {
-        ArgumentNullException.ThrowIfNull(codingAgent);
-        _codingAgent = codingAgent;
-    }
-
-    public Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync(
-        string? workspacePath,
-        CancellationToken cancellationToken) =>
-        _codingAgent.PrepareWorkspaceChangeAsync(workspacePath, cancellationToken);
-}
 
 internal sealed record WorkspaceChangeResult(
     string? PreviousPath,
@@ -42,31 +20,25 @@ internal sealed record WorkspaceChangeResult(
 
 internal sealed class CodingWorkspaceController : INotifyPropertyChanged
 {
-    private readonly ICodingWorkspaceRuntime _workspaceRuntime;
     private readonly IMainThreadDispatcher _mainThreadDispatcher;
     private readonly StringComparer _pathComparer;
     private readonly SemaphoreSlim _changeGate = new(1, 1);
     private string _workspaceInput = string.Empty;
-    private string? _committedWorkspacePath;
+    private string? _nextRunWorkspacePath;
     private string _statusText = "尚未设置工作路径";
     private bool _isChangingWorkspace;
 
-    public CodingWorkspaceController(
-        ICodingWorkspaceRuntime workspaceRuntime,
-        IMainThreadDispatcher mainThreadDispatcher)
-        : this(workspaceRuntime, mainThreadDispatcher, GetDefaultPathComparer())
+    public CodingWorkspaceController(IMainThreadDispatcher mainThreadDispatcher)
+        : this(mainThreadDispatcher, GetDefaultPathComparer())
     {
     }
 
     internal CodingWorkspaceController(
-        ICodingWorkspaceRuntime workspaceRuntime,
         IMainThreadDispatcher mainThreadDispatcher,
         StringComparer pathComparer)
     {
-        ArgumentNullException.ThrowIfNull(workspaceRuntime);
         ArgumentNullException.ThrowIfNull(mainThreadDispatcher);
         ArgumentNullException.ThrowIfNull(pathComparer);
-        _workspaceRuntime = workspaceRuntime;
         _mainThreadDispatcher = mainThreadDispatcher;
         _pathComparer = pathComparer;
     }
@@ -79,7 +51,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
         set => SetField(ref _workspaceInput, value ?? string.Empty);
     }
 
-    public string? CommittedWorkspacePath => _committedWorkspacePath;
+    public string? NextRunWorkspacePath => _nextRunWorkspacePath;
 
     public string StatusText => _statusText;
 
@@ -94,12 +66,12 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
         {
             await PublishChangingStateAsync(true).ConfigureAwait(false);
             string? normalizedPath = NormalizePath(requestedPath);
-            string? previousPath = _committedWorkspacePath;
+            string? previousPath = _nextRunWorkspacePath;
             if (_pathComparer.Equals(previousPath, normalizedPath))
             {
                 string noChangeMessage = normalizedPath is null
-                    ? "工作路径已清除"
-                    : $"工作路径未变化：{normalizedPath}";
+                    ? "下一轮工作路径已清除"
+                    : $"下一轮工作路径未变化：{normalizedPath}";
                 await PublishStateAsync(normalizedPath, noChangeMessage).ConfigureAwait(false);
                 return new WorkspaceChangeResult(previousPath, normalizedPath, false, noChangeMessage);
             }
@@ -109,25 +81,10 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
                 throw new DirectoryNotFoundException($"指定的工作路径不存在：{normalizedPath}");
             }
 
-            await using IWorkspaceChangeTransaction transaction = await _workspaceRuntime
-                .PrepareWorkspaceChangeAsync(normalizedPath, cancellationToken)
-                .ConfigureAwait(false);
-            transaction.Apply();
             string successMessage = normalizedPath is null
-                ? "工作路径已清除"
-                : $"工作路径已设置为：{normalizedPath}";
-            try
-            {
-                await PublishStateAsync(normalizedPath, successMessage).ConfigureAwait(false);
-            }
-            catch
-            {
-                await transaction.RollbackAsync().ConfigureAwait(false);
-                await PublishStateAsync(previousPath, "工作路径状态发布失败，已保留原工作路径").ConfigureAwait(false);
-                throw;
-            }
-
-            transaction.CommitAfterPublish();
+                ? "下一轮工作路径已清除"
+                : $"下一轮工作路径已设置为：{normalizedPath}";
+            await PublishStateAsync(normalizedPath, successMessage).ConfigureAwait(false);
             return new WorkspaceChangeResult(previousPath, normalizedPath, true, successMessage);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -151,7 +108,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
     private Task PublishStateAsync(string? workspacePath, string statusText) =>
         _mainThreadDispatcher.InvokeAsync(() =>
         {
-            SetField(ref _committedWorkspacePath, workspacePath, nameof(CommittedWorkspacePath));
+            SetField(ref _nextRunWorkspacePath, workspacePath, nameof(NextRunWorkspacePath));
             SetField(ref _workspaceInput, workspacePath ?? string.Empty, nameof(WorkspaceInput));
             SetField(ref _statusText, statusText, nameof(StatusText));
             return Task.CompletedTask;
@@ -160,7 +117,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
     private Task PublishErrorAsync(string message) =>
         _mainThreadDispatcher.InvokeAsync(() =>
         {
-            SetField(ref _statusText, $"工作路径应用失败：{message}", nameof(StatusText));
+            SetField(ref _statusText, $"工作路径设置失败：{message}", nameof(StatusText));
             return Task.CompletedTask;
         });
 

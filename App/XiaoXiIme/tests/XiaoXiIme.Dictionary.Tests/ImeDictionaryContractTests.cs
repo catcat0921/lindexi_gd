@@ -50,11 +50,38 @@ public class ImeDictionaryContractTests
     }
 
     [Fact]
+    public void DictionaryCandidate_WhenMappedThenUsesLayeredFrequencyAsScore()
+    {
+        var candidate = new DictionaryCandidate(
+            "你",
+            "ni",
+            BaseFrequency: 100,
+            DictionaryCandidateSourceKind.System,
+            DictionaryCandidateMatchKind.Exact);
+
+        Assert.Equal(new ImeCandidate("你", "ni", 100), candidate.ToImeCandidate());
+    }
+
+    [Fact]
     public void Query_WhenRequestIsNullThenThrows()
     {
         var dictionary = new InMemoryImeDictionary([]);
 
         Assert.Throws<ArgumentNullException>(() => dictionary.Query((ImeDictionaryQuery)null!));
+    }
+
+    [Fact]
+    public void Query_WhenReadingIsNullThenThrows()
+    {
+        var dictionary = new InMemoryImeDictionary([]);
+
+        Assert.Throws<ArgumentNullException>(() => dictionary.Query((string)null!));
+    }
+
+    [Fact]
+    public void Query_WhenQueryInputIsNullThenThrows()
+    {
+        Assert.Throws<ArgumentNullException>(() => new ImeDictionaryQuery(null!));
     }
 
     [Fact]

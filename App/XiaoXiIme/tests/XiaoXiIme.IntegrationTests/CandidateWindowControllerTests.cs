@@ -31,6 +31,8 @@ public class CandidateWindowControllerTests
         Assert.Equal(2, state.Candidates.Single(candidate => candidate.IsSelected).DisplayIndex);
         Assert.Equal(100, state.AnchorX);
         Assert.Equal(200, state.AnchorY);
+        Assert.Equal(ImeAboutState.SeWzcNotice, state.AttributionText);
+        Assert.True(state.HasAttribution);
 
         return Task.CompletedTask;
     }
@@ -44,7 +46,9 @@ public class CandidateWindowControllerTests
             new CompositionText("zz", "zz", 2),
             Array.Empty<ImeCandidate>(),
             ImeCandidateWindowState.Empty,
-            new ImeGuideline(ImeGuidelineLevel.NoCandidate, "无候选：zz"));
+            new ImeGuideline(ImeGuidelineLevel.NoCandidate, "无候选：zz"),
+            DiagnosticText: "Using the minimal fallback dictionary.",
+            IsUsingFallbackDictionary: true);
 
         var state = controller.Update(uiState);
 
@@ -52,6 +56,8 @@ public class CandidateWindowControllerTests
         Assert.Empty(state.Candidates);
         Assert.Equal("zz", state.CompositionText);
         Assert.Equal("无候选：zz", state.GuidelineText);
+        Assert.Equal(ImeAboutState.SeWzcNotice, state.AttributionText);
+        Assert.Equal("Using the minimal fallback dictionary.", state.DiagnosticText);
 
         return Task.CompletedTask;
     }

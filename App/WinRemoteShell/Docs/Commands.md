@@ -165,6 +165,28 @@ WinRemoteShell.exe pull --server 10.0.0.5:12399 --source "D:\remote\file.txt" --
 - 递归下载整个文件夹
 - 不支持通配符，每次操作一个文件或文件夹
 
+### `update` — 更新远端程序
+
+```
+WinRemoteShell.exe update
+WinRemoteShell.exe update --server 10.0.0.5:12399
+WinRemoteShell.exe update --force
+```
+
+| 参数 | 必需 | 说明 |
+|------|------|------|
+| `--server` | 否 | 服务器地址（`ip:port`），可从环境变量读取 |
+| `--force` | 否 | 忽略版本比较，强制上传并替换远端版本 |
+
+**行为**：
+
+- 比较本地和远端程序集信息版本；默认仅在本地版本更高时更新
+- 将本地应用目录中的发布文件流式上传到远端暂存目录
+- 远端启动新版本中的独立更新接管进程，当前服务完成响应后退出并释放端口
+- 接管进程等待旧进程结束，将旧 exe/dll 重命名到备份目录，移动新文件到安装目录，再按原端口重启
+- Windows 服务模式下由服务控制管理器重新启动服务；控制台模式下直接启动新的 `server --port` 进程
+- 更新仅支持 Windows
+
 ### `screenshot` — 远端屏幕截图
 
 ```

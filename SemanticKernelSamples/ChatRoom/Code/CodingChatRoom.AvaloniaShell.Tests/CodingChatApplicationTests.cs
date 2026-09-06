@@ -23,7 +23,7 @@ public sealed class CodingChatApplicationTests
     public void ApplicationCreationShouldImmediatelyProvideReusableEmptySession()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new TestSessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore());
 
         Assert.HasCount(1, application.Sessions);
         Assert.AreEqual(manager.SelectedSession.SessionId, application.SelectedSessionId);
@@ -39,7 +39,7 @@ public sealed class CodingChatApplicationTests
         var store = new TestSessionStore(older, newer);
         var manager = new CopilotChatManager();
         Guid initialSessionId = manager.SelectedSession.SessionId;
-        var application = new CodingChatApplication(manager, store);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store);
 
         await application.InitializeAsync();
 
@@ -52,7 +52,7 @@ public sealed class CodingChatApplicationTests
     public async Task CreateNewSessionAsyncShouldReuseTrulyEmptySession()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new TestSessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore());
         await application.InitializeAsync();
         Guid emptySessionId = application.SelectedSessionId;
 
@@ -67,7 +67,7 @@ public sealed class CodingChatApplicationTests
     public async Task CreateNewSessionAsyncFromNonEmptySessionShouldInsertAtTop()
     {
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, new TestSessionStore());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore());
         await application.InitializeAsync();
         await manager.AppendMessageAsync(new CopilotChatMessage(ChatRole.User, "现有问题"));
         Guid previousSessionId = application.SelectedSessionId;
@@ -85,7 +85,7 @@ public sealed class CodingChatApplicationTests
         CopilotChatSession persisted = CreateSession("历史会话", "消息", DateTimeOffset.Now);
         var store = new TestSessionStore(persisted) { LoadException = new InvalidDataException("加载失败") };
         var manager = new CopilotChatManager();
-        var application = new CodingChatApplication(manager, store);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store);
         Guid previousSessionId = manager.SelectedSession.SessionId;
 
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => application.OpenSessionAsync(persisted.SessionId));
@@ -101,7 +101,7 @@ public sealed class CodingChatApplicationTests
         var store = new TestSessionStore(persisted) { LoadException = new InvalidDataException("不应加载") };
         var manager = new CopilotChatManager();
         CopilotChatSession initialSession = manager.SelectedSession;
-        var application = new CodingChatApplication(manager, store);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store);
 
         await application.InitializeAsync();
 
@@ -114,7 +114,7 @@ public sealed class CodingChatApplicationTests
     {
         CopilotChatSession persisted = CreateSession("历史会话", "消息", DateTimeOffset.Now);
         var store = new TestSessionStore(persisted) { DeleteException = new IOException("删除失败") };
-        var application = new CodingChatApplication(new CopilotChatManager(), store);
+        var application = CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), store);
         await application.InitializeAsync();
 
         await Assert.ThrowsExactlyAsync<IOException>(() => application.DeleteSessionAsync(persisted.SessionId));
@@ -127,7 +127,7 @@ public sealed class CodingChatApplicationTests
     public async Task ActiveRunShouldDisableSessionCommands()
     {
         var runner = new ControllableRunner();
-        var application = new CodingChatApplication(new CopilotChatManager(), new TestSessionStore(), runner);
+        var application = CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), new TestSessionStore(), runner);
         await application.InitializeAsync();
         var viewModel = new SessionListViewModel(application);
 
@@ -167,7 +167,7 @@ public sealed class CodingChatApplicationTests
             new ChatMessage(ChatRole.Assistant, "助手回答"),
         ]);
         var store = new TestSessionStore();
-        var application = new CodingChatApplication(manager, store, new ControllableRunner());
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store, new ControllableRunner());
         await application.InitializeAsync();
         Assert.IsTrue(application.CanSend);
         Assert.IsTrue(application.CanCompressConversation);
@@ -189,6 +189,45 @@ public sealed class CodingChatApplicationTests
         Assert.AreSame(manager.SelectedSession, store.LastSavedSession);
         Assert.IsTrue(agentSession.TryGetInMemoryChatHistory(out List<ChatMessage>? compressedMessages));
         Assert.IsTrue(compressedMessages.Any(message => message.Text.Contains(summaryText, StringComparison.Ordinal)));
+    }
+
+    [DataTestMethod(DisplayName = "循环迭代只应在启用自动压缩时执行轮末总结")]
+    [DataRow(false, 0)]
+    [DataRow(true, 1)]
+    [Timeout(5000)]
+    public async Task RunLoopIterationAsyncShouldConditionallyCompressConversation(
+        bool enableAutomaticCompression,
+        int expectedCompressionCount)
+    {
+        int compressionCount = 0;
+        var chatClient = new FakeChatClient
+        {
+            OnGetResponseAsync = (_, _, _) =>
+            {
+                compressionCount++;
+                return Task.FromResult(new ChatResponse([new ChatMessage(ChatRole.Assistant, "循环摘要")]));
+            },
+        };
+        CopilotChatManager manager = CreateChatManager(chatClient);
+        IManualSendMessageContext context = await manager.CreateManualSendMessageContextAsync();
+        AgentSession agentSession = await context.GetAgentSessionAsync();
+        agentSession.SetInMemoryChatHistory(
+        [
+            new ChatMessage(ChatRole.System, "系统提示"),
+            new ChatMessage(ChatRole.User, "用户问题"),
+            new ChatMessage(ChatRole.Assistant, "助手回答"),
+        ]);
+        var runner = new ControllableRunner();
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
+        application.IsLoopIterationEnabled = true;
+
+        Task loopTask = application.RunLoopIterationAsync("继续处理", enableAutomaticCompression);
+        await runner.Started.Task;
+        application.IsLoopIterationEnabled = false;
+        runner.Complete();
+        await loopTask;
+
+        Assert.AreEqual(expectedCompressionCount, compressionCount);
     }
 
     private static CopilotChatSession CreateSession(string title, string content, DateTimeOffset startedTime)
@@ -285,6 +324,7 @@ public sealed class CodingChatApplicationTests
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
             bool enableAutomaticCompression,
+            bool enableDotNetRun,
             CancellationToken cancellationToken)
         {
             Started.TrySetResult();

@@ -6,11 +6,15 @@ public sealed record DictionaryPackageManifest
 
     public const string ExpectedPackageKind = "XiaoXiImeDictionary";
 
+    public const string CurrentCompilerVersion = "1";
+
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
     public string PackageKind { get; init; } = ExpectedPackageKind;
 
     public string CreatedBy { get; init; } = string.Empty;
+
+    public string CompilerVersion { get; init; } = CurrentCompilerVersion;
 
     public IReadOnlyList<DictionaryPackageSource> Sources { get; init; } = [];
 
@@ -21,11 +25,11 @@ public sealed record DictionaryPackageManifest
     public DictionaryPackageCounts Counts { get; init; } = new();
 }
 
-public sealed record DictionaryPackageSource(string Path, long Length);
+public sealed record DictionaryPackageSource(string Path, long Length, long LastWriteTimeUtcTicks);
 
 public sealed record DictionaryPackageParameters
 {
-    public string InputScheme { get; init; } = "fullPinyin";
+    public string InputScheme { get; init; } = DictionaryPackageFormat.FullPinyinInputScheme;
 
     public bool EnablePrefixIndex { get; init; } = true;
 
@@ -41,4 +45,8 @@ public sealed record DictionaryPackageCounts
     public int ExactKeys { get; init; }
 
     public int PrefixKeys { get; init; }
+
+    public int ShapeEntries { get; init; }
+
+    public int SymbolInputs { get; init; }
 }

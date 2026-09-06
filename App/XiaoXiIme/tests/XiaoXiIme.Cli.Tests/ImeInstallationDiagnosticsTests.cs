@@ -80,19 +80,11 @@ public sealed class ImeInstallationDiagnosticsTests
 
     [Theory]
     [InlineData("XiaoXiIme.ime", true)]
-    [InlineData(WindowsImeInstaller.InstalledImeFileName, true)]
+    [InlineData("XIAOXI.IME", true)]
     [InlineData("other.ime", false)]
     public void InstallerRecognizesExpectedSystemImeFiles(string imeFile, bool expected)
     {
         Assert.Equal(expected, WindowsImeInstaller.IsExpectedXiaoXiImeFile(imeFile));
-    }
-
-    [Theory]
-    [InlineData(0xE0200804u, -534771708L)]
-    [InlineData(0x00000409u, 1033L)]
-    public void KeyboardLayoutHandleUsesWin32SignExtension(uint layoutId, long expected)
-    {
-        Assert.Equal(expected, WindowsImeInstaller.ToKeyboardLayoutHandle(layoutId).ToInt64());
     }
 
     [Fact]

@@ -10,7 +10,7 @@ public sealed class ImeIpcSession
     public ImeIpcSession(XiaoXiImeIpcClient client, ImeSessionId sessionId, long generation = 0)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        SessionId = string.IsNullOrWhiteSpace(sessionId.Value) ? ImeSessionId.Create() : sessionId;
+        SessionId = sessionId.Effective == ImeSessionId.Default ? ImeSessionId.Create() : sessionId.Effective;
         Generation = generation;
     }
 

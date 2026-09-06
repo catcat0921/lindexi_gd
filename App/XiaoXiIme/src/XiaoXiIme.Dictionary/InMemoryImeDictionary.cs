@@ -12,17 +12,21 @@ public sealed class InMemoryImeDictionary : IImeDictionary
 
         _entries = entries
             .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Reading) && !string.IsNullOrWhiteSpace(candidate.Text))
-            .GroupBy(candidate => candidate.Reading, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(candidate => DictionaryPackageFormat.NormalizeLookupKey(candidate.Reading), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group
-                    .OrderByDescending(candidate => candidate.Score)
-                    .ThenBy(candidate => candidate.Text, StringComparer.Ordinal)
+                    .Select(candidate => candidate)
                     .ToList(),
-                StringComparer.OrdinalIgnoreCase);
+                StringComparer.Ordinal);
     }
 
-    public static InMemoryImeDictionary CreateDefault() => new(
+    public static InMemoryImeDictionary CreateDefault() => CreateMinimalFallback();
+
+    /// <summary>
+    /// Creates the small built-in dictionary used only when the production dictionary is unavailable.
+    /// </summary>
+    public static InMemoryImeDictionary CreateMinimalFallback() => new(
     [
         new("你", "ni", 100),
         new("呢", "ni", 60),
@@ -35,6 +39,7 @@ public sealed class InMemoryImeDictionary : IImeDictionary
 
     public IReadOnlyList<ImeCandidate> Query(string reading, int maxCount = 9)
     {
+        ArgumentNullException.ThrowIfNull(reading);
         return Query(new ImeDictionaryQuery(reading, maxCount));
     }
 
@@ -44,36 +49,54 @@ public sealed class InMemoryImeDictionary : IImeDictionary
 
         if (string.IsNullOrWhiteSpace(query.Input) || query.MaxCount <= 0)
         {
-            return Array.Empty<ImeCandidate>();
+            return [];
         }
 
-        var input = query.Input.Trim();
-        if (query.MatchMode == ImeDictionaryMatchMode.Exact)
+        var input = DictionaryPackageFormat.NormalizeLookupKey(query.Input);
+        var ranked = new List<DictionaryCandidate>();
+        if (_entries.TryGetValue(input, out var exactCandidates))
         {
-            return _entries.TryGetValue(input, out var candidates)
-                ? candidates.Take(query.MaxCount).ToArray()
-                : Array.Empty<ImeCandidate>();
+            ranked.AddRange(exactCandidates.Select(candidate => ToRanked(
+                candidate,
+                DictionaryCandidateMatchKind.Exact)));
         }
 
-        return _entries
-            .Where(entry => entry.Key.StartsWith(input, StringComparison.OrdinalIgnoreCase))
-            .SelectMany(entry => entry.Value.Select(candidate => new
-            {
-                Candidate = candidate,
-                IsExact = string.Equals(entry.Key, input, StringComparison.OrdinalIgnoreCase),
-            }))
-            .GroupBy(item => (item.Candidate.Text, item.Candidate.Reading))
-            .Select(group => group
-                .OrderByDescending(item => item.IsExact)
-                .ThenByDescending(item => item.Candidate.Score)
-                .First())
-            .OrderByDescending(item => item.IsExact)
-            .ThenByDescending(item => item.Candidate.Score)
-            .ThenBy(item => item.Candidate.Reading.Length)
-            .ThenBy(item => item.Candidate.Text, StringComparer.Ordinal)
-            .Take(query.MaxCount)
-            .Select(item => item.Candidate)
-            .ToArray();
+        if (query.MatchMode == ImeDictionaryMatchMode.ExactAndPrefix)
+        {
+            ranked.AddRange(_entries
+                .Where(entry =>
+                    !string.Equals(entry.Key, input, StringComparison.Ordinal)
+                    && entry.Key.StartsWith(input, StringComparison.Ordinal))
+                .SelectMany(entry => entry.Value)
+                .Select(candidate => ToRanked(candidate, DictionaryCandidateMatchKind.Prefix)));
+        }
+
+        return DictionaryCandidateRanking.Rank(ranked, query.MaxCount);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ImeCandidate> QueryByText(string text, int maxCount = 9)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (string.IsNullOrWhiteSpace(text) || maxCount <= 0)
+        {
+            return [];
+        }
+
+        var ranked = _entries.Values
+            .SelectMany(candidates => candidates)
+            .Where(candidate => string.Equals(candidate.Text, text, StringComparison.Ordinal))
+            .Select(candidate => ToRanked(candidate, DictionaryCandidateMatchKind.Exact));
+        return DictionaryCandidateRanking.RankReadings(ranked, maxCount);
+    }
+
+    private static DictionaryCandidate ToRanked(ImeCandidate candidate, DictionaryCandidateMatchKind matchKind)
+    {
+        return new DictionaryCandidate(
+            candidate.Text,
+            candidate.Reading,
+            candidate.Score,
+            DictionaryCandidateSourceKind.Fallback,
+            matchKind);
     }
 }
-

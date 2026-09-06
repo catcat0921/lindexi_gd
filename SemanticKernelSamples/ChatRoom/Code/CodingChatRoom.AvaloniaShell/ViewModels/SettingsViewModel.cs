@@ -319,7 +319,7 @@ public sealed class SettingsViewModel : ViewModelBase
             };
 
             await _settingsService.SaveAsync(modelConfiguration, shellSettings).ConfigureAwait(true);
-            SetStatus("设置已保存。模型、系统提示词和沙箱配置将在下次启动时生效。", isError: false);
+            SetStatus("设置已保存。沙箱配置将在下一次对话运行时生效；模型和系统提示词将在下次启动时生效。", isError: false);
         }
         catch (ArgumentException exception)
         {

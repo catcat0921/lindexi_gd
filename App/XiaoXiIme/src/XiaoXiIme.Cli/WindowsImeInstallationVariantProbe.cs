@@ -18,7 +18,7 @@ internal sealed record ImeInstallationVariantResult(
 
 internal static class WindowsImeInstallationVariantProbe
 {
-    internal const string ShortImeFileName = WindowsImeInstaller.InstalledImeFileName;
+    internal const string ShortImeFileName = "XIAOXI.IME";
 
     public static IReadOnlyList<ImeInstallationVariantResult> Run(string sourceImePath, string displayName)
     {

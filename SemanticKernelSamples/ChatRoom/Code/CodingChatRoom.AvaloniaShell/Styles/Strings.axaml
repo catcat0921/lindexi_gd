@@ -14,6 +14,14 @@
         <sys:String x:Key="OpenImageExternallyText">点击使用系统图片查看器打开</sys:String>
         <sys:String x:Key="LoopIterationText">循环迭代</sys:String>
         <sys:String x:Key="AutomaticCompressionText">自动压缩对话</sys:String>
+        <sys:String x:Key="StopLanguageServerText">结束 LSP 服务</sys:String>
+        <sys:String x:Key="StopLanguageServerToolTip">结束当前工作区的 LSP 服务；运行结束后可用，下次调用符号工具时自动重新启动</sys:String>
+        <sys:String x:Key="LanguageServerSettingsTitle">LSP 编程服务</sys:String>
+        <sys:String x:Key="LanguageServerSettingsDescription">安装或更新代码符号查询所需的 Roslyn Language Server。</sys:String>
+        <sys:String x:Key="InstallOrUpdateLanguageServerText">安装或更新 LSP</sys:String>
+        <sys:String x:Key="LanguageServerInstallHint">直接执行 dotnet tool update -g roslyn-language-server。</sys:String>
+        <sys:String x:Key="EnableDotNetRunText">启用 dotnet run</sys:String>
+        <sys:String x:Key="EnableDotNetRunToolTip">下一次新对话运行时包含 dotnet run 工具；当前正在进行的运行不受影响</sys:String>
         <sys:String x:Key="SendText">发送</sys:String>
         <sys:String x:Key="CompressConversationText">压缩对话</sys:String>
         <sys:String x:Key="StopText">停止</sys:String>

@@ -50,6 +50,9 @@
     <Project Path="tests/XiaoXiIme.ImeModule.Tests/XiaoXiIme.ImeModule.Tests.csproj">
       <Build Solution="Debug|*" Project="false" />
     </Project>
+    <Project Path="tests/XiaoXiIme.SandboxRunner/XiaoXiIme.SandboxRunner.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
     <Project Path="tests/XiaoXiIme.IntegrationTests/XiaoXiIme.IntegrationTests.csproj">
       <Build Solution="Debug|*" Project="false" />
     </Project>

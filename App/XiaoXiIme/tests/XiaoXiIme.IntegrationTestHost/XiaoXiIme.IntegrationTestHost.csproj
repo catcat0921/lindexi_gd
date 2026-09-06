@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\XiaoXiIme.Dictionary\XiaoXiIme.Dictionary.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.Foundation\XiaoXiIme.Foundation.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.ImeHost\XiaoXiIme.ImeHost.csproj" />
     <ProjectReference Include="..\..\src\XiaoXiIme.ImeIpc\XiaoXiIme.ImeIpc.csproj" />

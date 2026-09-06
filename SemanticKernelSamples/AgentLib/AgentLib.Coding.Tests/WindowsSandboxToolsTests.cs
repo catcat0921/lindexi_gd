@@ -10,6 +10,32 @@ namespace AgentLib.Coding.Tests;
 [TestClass]
 public sealed class WindowsSandboxToolsTests
 {
+    [TestMethod(DisplayName = "禁用沙盒后下一次工具装配应不再包含执行工具")]
+    public void ToolSourceWhenDisabledShouldReturnNoTools()
+    {
+        string workspacePath = CreateTestDirectory();
+        var toolSource = new WindowsSandboxToolSource("WinRemoteShell.exe", "127.0.0.1:12399");
+
+        IReadOnlyList<AITool> beforeUpdate = toolSource.CreateTools(workspacePath);
+        toolSource.UpdateConfiguration(false, string.Empty, string.Empty);
+        IReadOnlyList<AITool> afterUpdate = toolSource.CreateTools(workspacePath);
+
+        Assert.HasCount(1, beforeUpdate);
+        Assert.IsEmpty(afterUpdate);
+    }
+
+    [TestMethod(DisplayName = "重新启用沙盒后下一次工具装配应恢复执行工具")]
+    public void ToolSourceWhenReenabledShouldReturnTool()
+    {
+        string workspacePath = CreateTestDirectory();
+        var toolSource = new WindowsSandboxToolSource(false, string.Empty, string.Empty);
+        toolSource.UpdateConfiguration(true, "UpdatedShell.exe", "127.0.0.1:12400");
+
+        IReadOnlyList<AITool> tools = toolSource.CreateTools(workspacePath);
+
+        Assert.AreEqual("execute_in_windows_sandbox", tools.Single().Name);
+    }
+
     [TestMethod(DisplayName = "沙盒工具集合只应暴露高层执行工具")]
     public void AsAITools_WhenSandboxIsConfigured_ContainsOnlyExecutionTool()
     {

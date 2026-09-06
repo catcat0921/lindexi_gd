@@ -80,7 +80,8 @@ public sealed class WindowsSandboxIntegrationTests
         CodingChatShellSettings settings;
         try
         {
-            settings = await new CodingChatSettingsService(paths).LoadShellSettingsAsync();
+            var sandboxToolSource = new WindowsSandboxToolSource(false, string.Empty, string.Empty);
+            settings = await new CodingChatSettingsService(paths, sandboxToolSource).LoadShellSettingsAsync();
         }
         catch (IOException)
         {

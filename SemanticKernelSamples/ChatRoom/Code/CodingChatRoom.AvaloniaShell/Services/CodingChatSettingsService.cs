@@ -3,9 +3,8 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-
+using AgentLib.Coding.Sandboxes;
 using AgentLib.Core.AgentApiManagers.LanguageModelProviders;
-
 using CodingChatRoom.AvaloniaShell.Infrastructure;
 
 namespace CodingChatRoom.AvaloniaShell.Services;
@@ -19,11 +18,18 @@ internal sealed class CodingChatSettingsService
     };
 
     private readonly CodingChatRoomPaths _paths;
+    private readonly WindowsSandboxToolSource _windowsSandboxToolSource;
 
-    public CodingChatSettingsService(CodingChatRoomPaths paths)
+    public CodingChatSettingsService
+    (
+        CodingChatRoomPaths paths,
+        WindowsSandboxToolSource windowsSandboxToolSource
+    )
     {
         ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(windowsSandboxToolSource);
         _paths = paths;
+        _windowsSandboxToolSource = windowsSandboxToolSource;
     }
 
     public async Task<CodingChatSettingsSnapshot> LoadAsync(CancellationToken cancellationToken = default)
@@ -52,10 +58,12 @@ internal sealed class CodingChatSettingsService
         return new CodingChatSettingsSnapshot(modelConfiguration, shellSettings, modelConfigurationError);
     }
 
-    public async Task SaveAsync(
+    public async Task SaveAsync
+    (
         AgentApiManagerConfiguration modelConfiguration,
         CodingChatShellSettings shellSettings,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(modelConfiguration);
         ArgumentNullException.ThrowIfNull(shellSettings);
@@ -66,10 +74,19 @@ internal sealed class CodingChatSettingsService
         await modelConfiguration.SaveToFileAsync(_paths.ConfigurationFile).ConfigureAwait(false);
 
         string shellJson = JsonSerializer.Serialize(shellSettings, s_jsonOptions);
-        await File.WriteAllTextAsync(
+        await File.WriteAllTextAsync
+        (
             _paths.ShellSettingsFile.FullName,
             shellJson,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken
+        ).ConfigureAwait(false);
+
+        _windowsSandboxToolSource.UpdateConfiguration
+        (
+            shellSettings.IsWindowsSandboxEnabled,
+            shellSettings.WindowsSandboxToolPath,
+            shellSettings.WindowsSandboxServerAddress
+        );
     }
 
     public async Task<CodingChatShellSettings> LoadShellSettingsAsync(CancellationToken cancellationToken = default)
@@ -80,16 +97,19 @@ internal sealed class CodingChatSettingsService
             return new CodingChatShellSettings();
         }
 
-        string json = await File.ReadAllTextAsync(
+        string json = await File.ReadAllTextAsync
+        (
             _paths.ShellSettingsFile.FullName,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken
+        ).ConfigureAwait(false);
         return JsonSerializer.Deserialize<CodingChatShellSettings>(json, s_jsonOptions)
-            ?? new CodingChatShellSettings();
+               ?? new CodingChatShellSettings();
     }
-
 }
 
-internal sealed record CodingChatSettingsSnapshot(
+internal sealed record CodingChatSettingsSnapshot
+(
     AgentApiManagerConfiguration? ModelConfiguration,
     CodingChatShellSettings ShellSettings,
-    string? ModelConfigurationError);
+    string? ModelConfigurationError
+);

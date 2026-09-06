@@ -8,10 +8,16 @@
 
 - `system-test-plan [--json]`：输出覆盖传统 IME、TSF、Host、IPC、UI、安装和回滚的全局系统测试计划。
 - `system-test-run <abi-host> <tsf-dll> --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：仅在可还原 VM 中执行隔离 ABI/COM 测试并生成 JSON 报告。
-- `payload-build [--output <directory>] [--no-build]`：在开发机上构建或收集 x86/x64 组件并生成负载，不修改 Windows 输入法配置。
+- `payload-build [--output <directory>] [--no-build] [--dictionary-source <directory>]`：在开发机上构建或收集 x86/x64 组件并生成负载，不修改 Windows 输入法配置。
 - `integration-run [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS [--skip-tsf] [--report <file>]`：仅在可还原 VM 中执行完整验证，并始终在结束时清理输入法。
-- `install [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：校验负载，安装 x64/x86 输入法并保留，供人工体验。
+- `install [payload-directory] --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：校验负载，安装 x64/x86 输入法，启动 `app/host/XiaoXiIme.ImeHost.exe`，并等待 IPC `GetHostStatus` 报告运行中后才视为安装成功。
 - `uninstall --confirm I-UNDERSTAND-THIS-MODIFIES-WINDOWS`：卸载输入法并清理已部署文件。
+- `dictionary-update <source-directory> <package-directory> [--scheme fullPinyin|xiaoheDoublePinyin]`：递归读取 XiaoXiIme 自有 `*.phonetic.tsv`、可选 `*.shape.tsv`/`*.symbols.tsv`，暂存编译并验证后更新 package，旧版本保留为同级 `.previous` 目录。源路径、长度、最后修改时间和编译参数未变时复用现有 package，不创建 `.previous`。
+- `dictionary-rollback <package-directory>`：验证并交换当前 package 与 `.previous` 版本；不读取源目录。
+- `dictionary-inspect <package-directory> [--json]`：用正式加载器校验 package，报告路径、格式/编译器版本、输入方案、条目计数、SeWZC 署名和校验结果。
+- `dictionary-convert-sewzc <copied-snapshot-directory> <target-directory>`：一次性把已人工复制、与工作区解耦的 SeWZC `data/dictionaries` 快照转换为 XiaoXiIme 自有 TSV；固定输出 `phonetic/sewzc-default.phonetic.tsv`、`phonetic/xiaoxiime-project-terms.phonetic.tsv`、`shape/sewzc-moqi.shape.tsv`、`symbols/sewzc-default.symbols.tsv`。转换会切开粘连全拼，并把规范 5.4 术语写成独立 TSV，全部通过正式解析器验证后才成组替换。该命令拒绝 `SeWZC_IME` 仓库路径，也不进入运行时查询路径。
+- `dictionary-build-packages <source-directory> <host-output-directory>`：从 XiaoXiIme 自有 TSV 编译全拼和小鹤两个独立 package，并用正式加载器核对 `nihao`/`nihc` 以及规范术语 `xiaoxiaimuyi`/`xnxiaimuyi` 的首候选文本。该命令不发布 Native AOT，也不修改活动安装布局。
+- `payload-build` 会先确认 `data/dictionaries` 或 `--dictionary-source` 已有 XiaoXiIme 原生 TSV，再把全拼/小鹤 package 编译到独立 `dictionary-packages` 暂存目录并用正式加载器核对 `nihao`/`nihc` 以及规范术语 `xiaoxiaimuyi`/`xnxiaimuyi` 的首候选文本；缺源或查询冒烟失败时立即失败，不进入 Native AOT 发布。宿主 `publish` 写入 `app/host` 后，再把已校验 package 拷入最终负载并再次校验，避免被发布输出覆盖。`integration-run` 会再次用正式加载器核对两个 package 的输入方案，并分别核对 `nihao`/`nihc` 以及规范术语 `xiaoxiaimuyi`/`xnxiaimuyi` 的首候选文本；小鹤缺术语或首候选文本不是 `XiaoXiIme` 时也会失败。安装成功后的 `start-ime-host` 阶段会启动宿主并等待 IPC 就绪，失败时停止已启动进程。集成测试宿主会从负载 `app/host` 布局加载生产 package，而不是依赖进程当前目录。候选窗诊断会用 `IsHostUnavailable` 与 `IsUsingFallbackDictionary` 区分桥接不可达和宿主内部词库降级。
 
 真实安装和注册涉及管理员权限及系统注册表，`install`、`uninstall` 和 `integration-run` 必须在管理员终端及可还原 Windows 环境中执行。
 
@@ -61,7 +67,7 @@ integration-payload/
 │       └── tools/    # 64 位 TSF ABI Host
 └── app/
 	├── cli/          # VM 命令入口
-	├── host/         # IPC 上层宿主应用
+	├── host/         # IPC 上层宿主应用及全拼/小鹤双拼正式词库 package
 	└── tests/        # 集成测试程序集及运行依赖
 ```
 

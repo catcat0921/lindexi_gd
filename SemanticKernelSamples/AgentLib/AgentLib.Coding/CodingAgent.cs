@@ -13,8 +13,11 @@ namespace AgentLib.Coding;
 /// </summary>
 public sealed class CodingAgent : IAsyncDisposable
 {
-    private readonly CodingWorkspaceToolProvider _toolProvider;
+    private readonly string _languageServerCommand;
+    private readonly IReadOnlyList<ICodingWorkspaceToolSource> _additionalToolSources;
+    private readonly SemaphoreSlim _workspaceCacheGate = new(1, 1);
     private readonly string? _copilotInstructionsPath;
+    private CodingWorkspaceCache? _workspaceCache;
     private readonly object _disposeSync = new();
     private readonly CancellationTokenSource _disposeCancellationTokenSource = new();
     private Task? _disposeTask;
@@ -39,18 +42,15 @@ public sealed class CodingAgent : IAsyncDisposable
             throw new ArgumentException("附加工作区工具源不能包含 null。", nameof(options));
         }
 
-        _toolProvider = new CodingWorkspaceToolProvider
-        (
-            options.LanguageServerCommand,
-            additionalToolSources
-        );
+        _languageServerCommand = options.LanguageServerCommand;
+        _additionalToolSources = additionalToolSources;
         _copilotInstructionsPath = options.CopilotInstructionsPath;
     }
 
     /// <summary>
-    /// 获取当前已提交的代码工作区路径。
+    /// 获取当前缓存的代码工作区路径。
     /// </summary>
-    public string? WorkspacePath => _toolProvider.WorkspacePath;
+    public string? WorkspacePath => _workspaceCache?.WorkspacePath;
 
     /// <summary>
     /// 使用纯文本运行一次编程任务。
@@ -59,6 +59,7 @@ public sealed class CodingAgent : IAsyncDisposable
     /// <param name="prompt">用户任务文本。</param>
     /// <param name="workspacePath">本次运行期望使用的工作区路径。</param>
     /// <param name="enableAutomaticCompression">是否自动压缩对话历史。</param>
+    /// <param name="enableDotNetRun">是否为本次运行提供 <c>dotnet run</c> 工具。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>流式消息和完整生命周期任务。</returns>
     public Task<CodingAgentRunResult> RunAsync
@@ -67,6 +68,7 @@ public sealed class CodingAgent : IAsyncDisposable
         string prompt,
         string? workspacePath,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -81,6 +83,7 @@ public sealed class CodingAgent : IAsyncDisposable
             [new TextContent(prompt)],
             workspacePath,
             enableAutomaticCompression,
+            enableDotNetRun,
             cancellationToken
         );
     }
@@ -92,6 +95,7 @@ public sealed class CodingAgent : IAsyncDisposable
     /// <param name="contents">保持原始顺序的用户输入内容。</param>
     /// <param name="workspacePath">本次运行期望使用的工作区路径。</param>
     /// <param name="enableAutomaticCompression">是否自动压缩对话历史。</param>
+    /// <param name="enableDotNetRun">是否为本次运行提供 <c>dotnet run</c> 工具。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>流式消息和完整生命周期任务。</returns>
     public async Task<CodingAgentRunResult> RunAsync
@@ -100,6 +104,7 @@ public sealed class CodingAgent : IAsyncDisposable
         IReadOnlyList<AIContent> contents,
         string? workspacePath,
         bool enableAutomaticCompression = true,
+        bool enableDotNetRun = false,
         CancellationToken cancellationToken = default
     )
     {
@@ -111,7 +116,6 @@ public sealed class CodingAgent : IAsyncDisposable
             throw new ArgumentException("编程任务内容不能为空。", nameof(contents));
         }
 
-        CodingWorkspaceToolLease? lease = null;
         CancellationTokenSource? runCancellationTokenSource = null;
         bool ownershipTransferred = false;
         try
@@ -123,18 +127,16 @@ public sealed class CodingAgent : IAsyncDisposable
                 _disposeCancellationTokenSource.Token
             );
             CancellationToken runCancellationToken = runCancellationTokenSource.Token;
-            if (!AreSameWorkspace(_toolProvider.WorkspacePath, workspacePath))
-            {
-                await _toolProvider.SetWorkspacePathAsync(workspacePath, runCancellationToken).ConfigureAwait(false);
-            }
-
-            lease = await _toolProvider.AcquireLeaseAsync(runCancellationToken).ConfigureAwait(false);
+            CodingRunWorkspaceContext workspaceContext = await GetRunWorkspaceContextAsync(
+                workspacePath,
+                enableDotNetRun,
+                runCancellationToken).ConfigureAwait(false);
             ChatClientAgent chatClientAgent = await context.GetChatClientAgentAsync
             (
                 options =>
                 {
                     options.ChatOptions ??= new ChatOptions();
-                    options.ChatOptions.Tools = [.. lease.Tools];
+                    options.ChatOptions.Tools = [.. workspaceContext.Tools];
                     options.AIContextProviders = [];
                     options.EnableMessageInjection = true;
                     options.RequirePerServiceCallChatHistoryPersistence = true;
@@ -174,7 +176,7 @@ public sealed class CodingAgent : IAsyncDisposable
                 runContents,
                 chatClientAgent,
                 agentSession,
-                lease,
+                workspaceContext.ToolRegistrationRegistry,
                 runCancellationTokenSource
             );
             ownershipTransferred = true;
@@ -191,49 +193,71 @@ public sealed class CodingAgent : IAsyncDisposable
             if (!ownershipTransferred)
             {
                 runCancellationTokenSource?.Dispose();
-                if (lease is not null)
-                {
-                    await lease.DisposeAsync().ConfigureAwait(false);
-                }
             }
         }
     }
 
     /// <summary>
-    /// 准备一次工作区切换事务。准备阶段不会改变当前已提交工作区。
+    /// 停止当前工作区缓存中的 Roslyn Language Server。
     /// </summary>
-    /// <param name="workspacePath">候选工作区路径；为空表示清除工作区。</param>
-    /// <param name="cancellationToken">取消令牌，仅影响候选资源准备。</param>
-    /// <returns>必须提交、回滚或释放的工作区事务。</returns>
-    public async Task<IWorkspaceChangeTransaction> PrepareWorkspaceChangeAsync
-    (
+    /// <returns>存在活动 Language Server 并已停止时返回 <see langword="true"/>。</returns>
+    public Task<bool> StopLanguageServerAsync() =>
+        _workspaceCache?.StopLanguageServerAsync() ?? Task.FromResult(false);
+
+    private async Task<CodingRunWorkspaceContext> GetRunWorkspaceContextAsync(
         string? workspacePath,
-        CancellationToken cancellationToken = default
-    )
+        bool enableDotNetRun,
+        CancellationToken cancellationToken)
     {
-        ThrowIfDisposed();
-        using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource
-        (
-            cancellationToken,
-            _disposeCancellationTokenSource.Token
-        );
-        IWorkspaceChangeTransaction transaction = await _toolProvider
-            .PrepareWorkspaceChangeAsync(workspacePath, linkedCancellationTokenSource.Token)
-            .ConfigureAwait(false);
+        string? normalizedPath = string.IsNullOrWhiteSpace(workspacePath)
+            ? null
+            : Path.GetFullPath(workspacePath);
+        await _workspaceCacheGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
-            return transaction;
+            if (AreSameWorkspace(_workspaceCache?.WorkspacePath, normalizedPath))
+            {
+                return CreateRunWorkspaceContext(_workspaceCache, enableDotNetRun);
+            }
+
+            CodingWorkspaceCache? replacement = normalizedPath is null
+                ? null
+                : CodingWorkspaceCache.Create(
+                    normalizedPath,
+                    _languageServerCommand);
+            CodingWorkspaceCache? previous = _workspaceCache;
+            _workspaceCache = replacement;
+            if (previous is not null)
+            {
+                await previous.DisposeAsync().ConfigureAwait(false);
+            }
+
+            return CreateRunWorkspaceContext(replacement, enableDotNetRun);
         }
-        catch
+        finally
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
-            throw;
+            _workspaceCacheGate.Release();
         }
     }
 
+    private CodingRunWorkspaceContext CreateRunWorkspaceContext(
+        CodingWorkspaceCache? workspaceCache,
+        bool enableDotNetRun)
+    {
+        if (workspaceCache is null)
+        {
+            return CodingRunWorkspaceContext.Empty;
+        }
+
+        IReadOnlyList<ToolRegistration> additionalToolRegistrations = _additionalToolSources
+            .SelectMany(source => source.CreateToolRegistrations(workspaceCache.WorkspacePath))
+            .ToArray();
+        return workspaceCache.CreateRunContext(additionalToolRegistrations, enableDotNetRun);
+    }
+
     /// <summary>
-    /// 异步取消活动运行，并在它们完成清理后释放工作区资源。
+    /// 异步取消活动运行，并在它们完成清理后释放工作区缓存。
     /// </summary>
     public ValueTask DisposeAsync()
     {
@@ -250,7 +274,21 @@ public sealed class CodingAgent : IAsyncDisposable
         try
         {
             _disposeCancellationTokenSource.Cancel();
-            await _toolProvider.DisposeAsync().ConfigureAwait(false);
+            await _workspaceCacheGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                CodingWorkspaceCache? cache = _workspaceCache;
+                _workspaceCache = null;
+                if (cache is not null)
+                {
+                    await cache.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _workspaceCacheGate.Release();
+                _workspaceCacheGate.Dispose();
+            }
         }
         finally
         {
@@ -264,7 +302,7 @@ public sealed class CodingAgent : IAsyncDisposable
         IReadOnlyList<AIContent> contents,
         ChatClientAgent chatClientAgent,
         AgentSession agentSession,
-        CodingWorkspaceToolLease lease,
+        ToolRegistrationRegistry toolRegistrationRegistry,
         CancellationTokenSource runCancellationTokenSource
     )
     {
@@ -305,7 +343,7 @@ public sealed class CodingAgent : IAsyncDisposable
                                cancellationToken
                            ))
             {
-                AppendResponseUpdate(context, update, lease.ToolRegistrationRegistry);
+                AppendResponseUpdate(context, update, toolRegistrationRegistry);
                 hasResponseUpdate = true;
             }
 
@@ -329,14 +367,7 @@ public sealed class CodingAgent : IAsyncDisposable
             }
             finally
             {
-                try
-                {
-                    await lease.DisposeAsync().ConfigureAwait(false);
-                }
-                finally
-                {
-                    runCancellationTokenSource.Dispose();
-                }
+                runCancellationTokenSource.Dispose();
             }
         }
     }
