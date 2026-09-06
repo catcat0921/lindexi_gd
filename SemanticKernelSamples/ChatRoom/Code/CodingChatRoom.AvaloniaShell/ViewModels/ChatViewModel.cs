@@ -7,12 +7,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-
 using AgentLib;
 using AgentLib.Model;
-
 using CodingChatRoom.AvaloniaShell.Services;
-
 using Microsoft.Extensions.AI;
 
 namespace CodingChatRoom.AvaloniaShell.ViewModels;
@@ -28,6 +25,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     private string _modelStatusText;
     private CopilotChatSession? _subscribedSession;
     private LanguageModelOptionViewModel? _selectedModel;
+    private ReasoningEffortOptionViewModel? _selectedReasoningEffort;
     private string _inputText = string.Empty;
     private string? _runStatusText;
     private bool _isLoopIterationEnabled;
@@ -47,6 +45,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         StopLanguageServerCommand = new SimpleCommand(static () => { }, static () => false);
         ApplyWorkspaceCommand = new SimpleCommand(static () => { }, static () => false);
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
+        InitializeReasoningEfforts();
     }
 
     internal ChatViewModel(
@@ -68,6 +67,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         _application.StateChanged += OnApplicationStateChanged;
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
         InitializeAvailableModels();
+        InitializeReasoningEfforts();
         AttachSession(_chatManager.SelectedSession);
     }
 
@@ -94,6 +94,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         _workspaceController.PropertyChanged += OnWorkspaceControllerPropertyChanged;
         PendingImages.CollectionChanged += OnPendingImagesCollectionChanged;
         InitializeAvailableModels();
+        InitializeReasoningEfforts();
         AttachSession(_chatManager.SelectedSession);
     }
 
@@ -116,6 +117,26 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前进程可用的语言模型。
     /// </summary>
     public ObservableCollection<LanguageModelOptionViewModel> AvailableModels { get; } = [];
+
+    /// <summary>
+    /// 获取可选择的思考强度。
+    /// </summary>
+    public ObservableCollection<ReasoningEffortOptionViewModel> AvailableReasoningEfforts { get; } = [];
+
+    /// <summary>
+    /// 获取或设置当前思考强度。
+    /// </summary>
+    public ReasoningEffortOptionViewModel? SelectedReasoningEffort
+    {
+        get => _selectedReasoningEffort;
+        set
+        {
+            if (value is not null && AvailableReasoningEfforts.Contains(value))
+            {
+                SetField(ref _selectedReasoningEffort, value);
+            }
+        }
+    }
 
     /// <summary>
     /// 获取或设置当前对话使用的语言模型。
@@ -238,9 +259,9 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取是否可发送消息。
     /// </summary>
     public bool CanSend => _application?.CanSend == true
-        && (IsLoopIterationEnabled
-            ? !string.IsNullOrWhiteSpace(InputText)
-            : !string.IsNullOrWhiteSpace(InputText) || PendingImages.Count > 0);
+                           && (IsLoopIterationEnabled
+                               ? !string.IsNullOrWhiteSpace(InputText)
+                               : !string.IsNullOrWhiteSpace(InputText) || PendingImages.Count > 0);
 
     /// <summary>
     /// 获取当前对话是否可以压缩。
@@ -301,6 +322,15 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取当前是否可以应用工作路径。
     /// </summary>
     public bool CanApplyWorkspace => _workspaceController is not null && !IsChangingWorkspace;
+
+    private void InitializeReasoningEfforts()
+    {
+        AvailableReasoningEfforts.Add(new ReasoningEffortOptionViewModel("默认", null));
+        AvailableReasoningEfforts.Add(new ReasoningEffortOptionViewModel("低", ReasoningEffort.Low));
+        AvailableReasoningEfforts.Add(new ReasoningEffortOptionViewModel("中", ReasoningEffort.Medium));
+        AvailableReasoningEfforts.Add(new ReasoningEffortOptionViewModel("高", ReasoningEffort.High));
+        _selectedReasoningEffort = AvailableReasoningEfforts[0];
+    }
 
     private void InitializeAvailableModels()
     {
@@ -550,27 +580,30 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         PendingImages.Clear();
         _runStatusText = isInterruption ? "正在提交插话" : "正在运行";
         OnPropertyChanged(nameof(StatusText));
+        var runOptions = new CodingChatRunOptions(
+            IsAutomaticCompressionEnabled,
+            IsDotNetRunEnabled,
+            SelectedReasoningEffort?.Value);
         try
         {
             if (runLoopIteration)
             {
                 await _application
-                    .RunLoopIterationAsync(loopPrompt, IsAutomaticCompressionEnabled)
+                    .RunLoopIterationAsync(loopPrompt, runOptions)
                     .ConfigureAwait(true);
             }
             else
             {
                 await _application
-                    .SendMessageAsync(
-                        contents,
-                        IsAutomaticCompressionEnabled,
-                        IsDotNetRunEnabled)
+                    .SendMessageAsync(contents, runOptions)
                     .ConfigureAwait(true);
             }
 
             _runStatusText = isInterruption && IsRunning
                 ? "插话已提交，等待 Agent 处理"
-                : IsRunning ? "正在运行" : null;
+                : IsRunning
+                    ? "正在运行"
+                    : null;
         }
         catch (OperationCanceledException)
         {

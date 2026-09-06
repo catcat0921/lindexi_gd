@@ -221,7 +221,9 @@ public sealed class CodingChatApplicationTests
         var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         application.IsLoopIterationEnabled = true;
 
-        Task loopTask = application.RunLoopIterationAsync("继续处理", enableAutomaticCompression);
+        Task loopTask = application.RunLoopIterationAsync(
+            "继续处理",
+            new CodingChatRunOptions(enableAutomaticCompression, false, null));
         await runner.Started.Task;
         application.IsLoopIterationEnabled = false;
         runner.Complete();
@@ -323,8 +325,7 @@ public sealed class CodingChatApplicationTests
         public Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken)
         {
             Started.TrySetResult();

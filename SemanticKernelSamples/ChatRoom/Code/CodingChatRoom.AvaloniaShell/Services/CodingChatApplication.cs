@@ -160,8 +160,7 @@ internal sealed class CodingChatApplication
     public async Task SendMessageAsync
     (
         string prompt,
-        bool enableAutomaticCompression = true,
-        bool enableDotNetRun = false,
+        CodingChatRunOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -172,16 +171,14 @@ internal sealed class CodingChatApplication
 
         await SendMessageAsync(
             [new TextContent(prompt)],
-            enableAutomaticCompression,
-            enableDotNetRun,
+            options,
             cancellationToken);
     }
 
     public async Task SendMessageAsync
     (
         IReadOnlyList<AIContent> contents,
-        bool enableAutomaticCompression = true,
-        bool enableDotNetRun = false,
+        CodingChatRunOptions? options = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -218,8 +215,7 @@ internal sealed class CodingChatApplication
                 (
                     runContents,
                     _workspaceController.NextRunWorkspacePath,
-                    enableAutomaticCompression,
-                    enableDotNetRun,
+                    options ?? CodingChatRunOptions.Default,
                     runCancellationTokenSource.Token
                 );
             await runResult.CompletionTask;
@@ -262,7 +258,7 @@ internal sealed class CodingChatApplication
 
     public async Task RunLoopIterationAsync(
         string prompt,
-        bool enableAutomaticCompression,
+        CodingChatRunOptions options,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(prompt))
@@ -276,9 +272,9 @@ internal sealed class CodingChatApplication
             {
                 await SendMessageAsync(
                     prompt,
-                    enableAutomaticCompression,
-                    cancellationToken: cancellationToken);
-                if (enableAutomaticCompression)
+                    options,
+                    cancellationToken);
+                if (options.EnableAutomaticCompression)
                 {
                     await CompressConversationAsync(cancellationToken);
                 }

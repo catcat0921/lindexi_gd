@@ -172,7 +172,7 @@
                 Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="Auto,*,Auto,220" RowDefinitions="Auto,Auto">
+            <Grid ColumnDefinitions="Auto,*,Auto,220,120" RowDefinitions="Auto,Auto">
                 <TextBlock Grid.Row="0"
                            Grid.Column="0"
                            Margin="0,0,8,0"
@@ -197,7 +197,8 @@
                           Grid.Column="3"
                           Margin="8,0,0,0"
                           ItemsSource="{Binding AvailableModels}"
-                          SelectedItem="{Binding SelectedModel}">
+                          SelectedItem="{Binding SelectedModel}"
+                          IsEnabled="{Binding !IsRunning}">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:LanguageModelOptionViewModel">
                             <TextBlock Text="{Binding DisplayName}"
@@ -205,9 +206,23 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
+                <ComboBox x:Name="ReasoningEffortSelector"
+                          Grid.Row="0"
+                          Grid.Column="4"
+                          Margin="8,0,0,0"
+                          ToolTip.Tip="{StaticResource ReasoningEffortToolTip}"
+                          ItemsSource="{Binding AvailableReasoningEfforts}"
+                          SelectedItem="{Binding SelectedReasoningEffort}"
+                          IsEnabled="{Binding !IsRunning}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ReasoningEffortOptionViewModel">
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <TextBlock Grid.Row="1"
                            Grid.Column="1"
-                           Grid.ColumnSpan="3"
+                           Grid.ColumnSpan="4"
                            Margin="0,4,0,0"
                            Classes="Subtitle"
                            Text="{Binding WorkspaceStatusText}"
