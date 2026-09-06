@@ -48,7 +48,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
     private readonly SemaphoreSlim _changeGate = new(1, 1);
     private string _workspaceInput = string.Empty;
     private string? _committedWorkspacePath;
-    private string _statusText = "尚未设置工作路径";
+    private string _statusText = "工作路径：未设置";
     private bool _isChangingWorkspace;
 
     public CodingWorkspaceController(
@@ -97,9 +97,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
             string? previousPath = _committedWorkspacePath;
             if (_pathComparer.Equals(previousPath, normalizedPath))
             {
-                string noChangeMessage = normalizedPath is null
-                    ? "工作路径已清除"
-                    : $"工作路径未变化：{normalizedPath}";
+                string noChangeMessage = FormatWorkspaceStatus(normalizedPath);
                 await PublishStateAsync(normalizedPath, noChangeMessage).ConfigureAwait(false);
                 return new WorkspaceChangeResult(previousPath, normalizedPath, false, noChangeMessage);
             }
@@ -113,9 +111,7 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
                 .PrepareWorkspaceChangeAsync(normalizedPath, cancellationToken)
                 .ConfigureAwait(false);
             transaction.Apply();
-            string successMessage = normalizedPath is null
-                ? "工作路径已清除"
-                : $"工作路径已设置为：{normalizedPath}";
+            string successMessage = FormatWorkspaceStatus(normalizedPath);
             try
             {
                 await PublishStateAsync(normalizedPath, successMessage).ConfigureAwait(false);
@@ -147,6 +143,9 @@ internal sealed class CodingWorkspaceController : INotifyPropertyChanged
 
     private static string? NormalizePath(string? requestedPath) =>
         string.IsNullOrWhiteSpace(requestedPath) ? null : Path.GetFullPath(requestedPath.Trim());
+
+    private static string FormatWorkspaceStatus(string? workspacePath) =>
+        workspacePath is null ? "工作路径：未设置" : $"工作路径：{workspacePath}";
 
     private Task PublishStateAsync(string? workspacePath, string statusText) =>
         _mainThreadDispatcher.InvokeAsync(() =>

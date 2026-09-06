@@ -475,7 +475,7 @@ public sealed class ChatViewModelTests
         await WaitUntilAsync(() => viewModel.CommittedWorkspacePath is not null);
 
         Assert.AreEqual(Path.GetFullPath(workspacePath), viewModel.CommittedWorkspacePath);
-        StringAssert.Contains(viewModel.WorkspaceStatusText, "已设置");
+        Assert.AreEqual($"工作路径：{Path.GetFullPath(workspacePath)}", viewModel.WorkspaceStatusText);
         Assert.IsTrue(viewModel.CanApplyWorkspace);
     }
 

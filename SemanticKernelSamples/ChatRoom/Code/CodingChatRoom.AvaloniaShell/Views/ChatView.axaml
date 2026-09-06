@@ -205,16 +205,13 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <StackPanel Grid.Row="1"
-                            Grid.Column="1"
-                            Grid.ColumnSpan="3"
-                            Margin="0,4,0,0"
-                            Orientation="Horizontal"
-                            Spacing="8">
-                    <TextBlock Classes="Subtitle" Text="{Binding WorkspaceStatusText}" />
-                    <TextBlock Classes="Subtitle"
-                               Text="{Binding CommittedWorkspacePath, StringFormat='当前：{0}'}" />
-                </StackPanel>
+                <TextBlock Grid.Row="1"
+                           Grid.Column="1"
+                           Grid.ColumnSpan="3"
+                           Margin="0,4,0,0"
+                           Classes="Subtitle"
+                           Text="{Binding WorkspaceStatusText}"
+                           TextTrimming="CharacterEllipsis" />
             </Grid>
         </Border>
 
