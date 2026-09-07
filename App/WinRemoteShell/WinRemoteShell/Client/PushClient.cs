@@ -6,21 +6,19 @@ namespace WinRemoteShell.Client;
 
 public static class PushClient
 {
-    public static Task PushAsync(
-        Uri server,
-        string source,
-        string target,
-        CancellationToken cancellationToken = default) =>
-        PushAsync(server, source, target, PushMode.Merge, cancellationToken);
-
+    /// <summary>
+    /// Pushes a local file or directory to the remote server.
+    /// </summary>
     public static async Task PushAsync(
         Uri server,
         string source,
         string target,
-        PushMode mode,
+        PushMode mode = PushMode.Merge,
+        TextWriter? output = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(server);
+        output ??= TextWriter.Null;
         ArgumentNullException.ThrowIfNull(source);
         var deleteTarget = source.Length == 0;
         if (!deleteTarget && string.IsNullOrWhiteSpace(source))
@@ -56,6 +54,14 @@ public static class PushClient
             request,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken);
+        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(responseStream);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            await output.WriteLineAsync(line.AsMemory(), cancellationToken);
+            await output.FlushAsync(cancellationToken);
+        }
+
         response.EnsureSuccessStatusCode();
     }
 

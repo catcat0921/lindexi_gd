@@ -38,6 +38,8 @@ public sealed record KillProcessesResponse(IReadOnlyList<KillProcessResult> Proc
 
 public sealed record KillProcessResult(int Id, string Name, bool Killed, string? Error);
 
+public sealed record UpdateVersionResponse(string Version);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ExecRequest))]
 [JsonSerializable(typeof(ChangeDirectoryRequest))]
@@ -46,4 +48,5 @@ public sealed record KillProcessResult(int Id, string Name, bool Killed, string?
 [JsonSerializable(typeof(ProcessListResponse))]
 [JsonSerializable(typeof(KillProcessesRequest))]
 [JsonSerializable(typeof(KillProcessesResponse))]
+[JsonSerializable(typeof(UpdateVersionResponse))]
 internal partial class AppJsonSerializerContext : JsonSerializerContext;

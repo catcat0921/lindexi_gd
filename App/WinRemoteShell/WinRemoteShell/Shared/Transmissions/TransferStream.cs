@@ -49,7 +49,8 @@ internal static class TransferStream
 
     internal static async Task ReceiveAsync(Stream stream, string target,
         bool placeFileInExistingDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, CancellationToken, Task>? reportAsync = null)
     {
         var header = await TransferProtocol.ReadHeaderAsync(stream, cancellationToken);
         var entries = new List<TransferManifestEntry>(header.EntryCount);
@@ -108,6 +109,10 @@ internal static class TransferStream
 
             File.SetCreationTimeUtc(destinationPath, entry.CreationTimeUtc);
             File.SetLastWriteTimeUtc(destinationPath, entry.LastWriteTimeUtc);
+            if (reportAsync is not null)
+            {
+                await reportAsync($"File: {destinationPath}", cancellationToken);
+            }
         }
 
         foreach (var entry in entries
@@ -117,6 +122,10 @@ internal static class TransferStream
             var destinationPath = destinationPaths[entry];
             Directory.SetCreationTimeUtc(destinationPath, entry.CreationTimeUtc);
             Directory.SetLastWriteTimeUtc(destinationPath, entry.LastWriteTimeUtc);
+            if (reportAsync is not null)
+            {
+                await reportAsync($"Directory: {destinationPath}", cancellationToken);
+            }
         }
     }
 
@@ -132,9 +141,7 @@ internal static class TransferStream
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)
         {
-            if (string.IsNullOrWhiteSpace(entry.RelativePath) ||
-                Path.IsPathRooted(entry.RelativePath) ||
-                entry.RelativePath.Contains('\\'))
+            if (string.IsNullOrWhiteSpace(entry.RelativePath))
             {
                 throw new InvalidDataException($"Transfer entry path '{entry.RelativePath}' is invalid.");
             }
@@ -154,13 +161,7 @@ internal static class TransferStream
             return targetRoot;
         }
 
-        var destinationPath = Path.GetFullPath(Path.Combine(targetRoot, relativePath));
-        if (!IsPathWithinDirectory(targetRoot, destinationPath))
-        {
-            throw new InvalidDataException($"Transfer entry '{relativePath}' is outside the target directory.");
-        }
-
-        return destinationPath;
+        return Path.GetFullPath(Path.Combine(targetRoot, relativePath));
     }
 
     private static async Task CopyExactlyAsync(Stream source, Stream destination,
@@ -191,16 +192,4 @@ internal static class TransferStream
         }
     }
 
-    private static bool IsPathWithinDirectory(string directory, string path)
-    {
-        if (path.Equals(directory, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var directoryPrefix = Path.EndsInDirectorySeparator(directory)
-            ? directory
-            : directory + Path.DirectorySeparatorChar;
-        return path.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase);
-    }
 }

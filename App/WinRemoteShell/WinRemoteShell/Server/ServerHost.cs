@@ -1,7 +1,9 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net.WebSockets;
 using System.Text;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using WinRemoteShell.Shared;
 using WinRemoteShell.Shared.Transmissions;
 
@@ -32,6 +34,7 @@ public static class ServerHost
         MapShell(app);
         MapPush(app);
         MapPull(app);
+        MapUpdate(app, port);
         MapScreenshot(app);
         MapProcesses(app);
         MapKillProcesses(app);
@@ -191,60 +194,99 @@ public static class ServerHost
 
     private static void MapPush(WebApplication app)
     {
-        app.MapPost("/push", async (HttpContext context) =>
+        app.MapPost("/push", async (HttpContext context, CmdProcess cmd) =>
         {
-            var target = Decode(context.Request.Headers["X-WinRS-Target"].ToString());
-            var modeValue = context.Request.Headers["X-WinRS-Push-Mode"].ToString();
-            var mode = PushMode.Merge;
-            if (!string.IsNullOrWhiteSpace(modeValue) &&
-                (!Enum.TryParse(modeValue, true, out mode) || !Enum.IsDefined(mode)))
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            try
             {
-                return Results.BadRequest("The push mode is invalid.");
-            }
+                var target = Decode(context.Request.Headers["X-WinRS-Target"].ToString());
+                var workingDirectory = await cmd.GetWorkingDirectoryAsync(context.RequestAborted);
+                target = Path.GetFullPath(target, workingDirectory);
 
-            var deleteTargetValue = context.Request.Headers["X-WinRS-Delete-Target"].ToString();
-            if (!string.IsNullOrWhiteSpace(deleteTargetValue) &&
-                !bool.TryParse(deleteTargetValue, out _))
-            {
-                return Results.BadRequest("The delete-target value is invalid.");
-            }
-
-            var deleteTarget = bool.TryParse(deleteTargetValue, out var parsedDeleteTarget) && parsedDeleteTarget;
-            if (deleteTarget && mode != PushMode.Replace)
-            {
-                return Results.BadRequest("Deleting the push target requires Replace mode.");
-            }
-
-            var targetExists = File.Exists(target) || Directory.Exists(target);
-            if (mode == PushMode.FailIfExists && targetExists)
-            {
-                return Results.Conflict("The push target already exists.");
-            }
-
-            if (mode == PushMode.Replace && targetExists)
-            {
-                if (Directory.Exists(target))
+                var modeValue = context.Request.Headers["X-WinRS-Push-Mode"].ToString();
+                var mode = PushMode.Merge;
+                if (!string.IsNullOrWhiteSpace(modeValue) &&
+                    (!Enum.TryParse(modeValue, true, out mode) || !Enum.IsDefined(mode)))
                 {
-                    Directory.Delete(target, true);
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await WritePushResultAsync(context, "The push mode is invalid.", context.RequestAborted);
+                    return;
                 }
-                else
+
+                var deleteTargetValue = context.Request.Headers["X-WinRS-Delete-Target"].ToString();
+                if (!string.IsNullOrWhiteSpace(deleteTargetValue) &&
+                    !bool.TryParse(deleteTargetValue, out _))
                 {
-                    File.Delete(target);
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await WritePushResultAsync(context, "The delete-target value is invalid.", context.RequestAborted);
+                    return;
                 }
-            }
 
-            if (deleteTarget)
+                var deleteTarget = bool.TryParse(deleteTargetValue, out var parsedDeleteTarget) && parsedDeleteTarget;
+                if (deleteTarget && mode != PushMode.Replace)
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await WritePushResultAsync(context, "Deleting the push target requires Replace mode.", context.RequestAborted);
+                    return;
+                }
+
+                var targetExists = File.Exists(target) || Directory.Exists(target);
+                if (mode == PushMode.FailIfExists && targetExists)
+                {
+                    context.Response.StatusCode = StatusCodes.Status409Conflict;
+                    await WritePushResultAsync(context, "The push target already exists.", context.RequestAborted);
+                    return;
+                }
+
+                if (mode == PushMode.Replace && targetExists)
+                {
+                    if (Directory.Exists(target))
+                    {
+                        Directory.Delete(target, true);
+                    }
+                    else
+                    {
+                        File.Delete(target);
+                    }
+
+                    await WritePushResultAsync(context, $"Deleted: {target}", context.RequestAborted);
+                }
+
+                if (deleteTarget)
+                {
+                    return;
+                }
+
+                await TransferStream.ReceiveAsync(
+                    context.Request.Body,
+                    target,
+                    placeFileInExistingDirectory: false,
+                    context.RequestAborted,
+                    (result, cancellationToken) => WritePushResultAsync(context, result, cancellationToken));
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
             {
-                return Results.Ok();
             }
+            catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+            {
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                }
 
-            await TransferStream.ReceiveAsync(
-                context.Request.Body,
-                target,
-                placeFileInExistingDirectory: false,
-                context.RequestAborted);
-            return Results.Ok();
+                await WritePushResultAsync(context, exception.ToString(), context.RequestAborted);
+                await context.Request.Body.CopyToAsync(Stream.Null, context.RequestAborted);
+            }
         });
+    }
+
+    private static async Task WritePushResultAsync(
+        HttpContext context,
+        string result,
+        CancellationToken cancellationToken)
+    {
+        await context.Response.WriteAsync(result + Environment.NewLine, cancellationToken);
+        await context.Response.Body.FlushAsync(cancellationToken);
     }
 
     private static void MapPull(WebApplication app)
@@ -257,6 +299,115 @@ public static class ServerHost
                 context.Response.Body,
                 TransferManifest.Create(source),
                 context.RequestAborted);
+        });
+    }
+
+    private static void MapUpdate(WebApplication app, int port)
+    {
+        app.MapGet("/update/version", () => new UpdateVersionResponse(ApplicationVersion.Current));
+        app.MapPost("/update", async (HttpContext context) =>
+        {
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            string? stagingDirectory = null;
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    throw new PlatformNotSupportedException("Self-update is only supported on Windows.");
+                }
+
+                var version = Decode(context.Request.Headers["X-WinRS-Version"].ToString());
+                var forceValue = context.Request.Headers["X-WinRS-Force"].ToString();
+                if (!bool.TryParse(forceValue, out var force))
+                {
+                    context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await WritePushResultAsync(context, "The force value is invalid.", context.RequestAborted);
+                    return;
+                }
+
+                if (!force && ApplicationVersion.Compare(version, ApplicationVersion.Current) <= 0)
+                {
+                    context.Response.StatusCode = StatusCodes.Status409Conflict;
+                    await WritePushResultAsync(
+                        context,
+                        $"Remote version {ApplicationVersion.Current} is not older than local version {version}. Use --force to update anyway.",
+                        context.RequestAborted);
+                    return;
+                }
+
+                stagingDirectory = Path.Combine(
+                    Path.GetTempPath(),
+                    $"WinRemoteShell_Update_{Guid.NewGuid():N}");
+                await TransferStream.ReceiveAsync(
+                    context.Request.Body,
+                    stagingDirectory,
+                    placeFileInExistingDirectory: false,
+                    context.RequestAborted,
+                    (result, cancellationToken) => WritePushResultAsync(context, result, cancellationToken));
+
+                var currentExecutable = Environment.ProcessPath;
+                if (string.IsNullOrWhiteSpace(currentExecutable))
+                {
+                    throw new InvalidOperationException("The current executable path could not be determined.");
+                }
+
+                var stagedExecutable = Path.Combine(stagingDirectory, Path.GetFileName(currentExecutable));
+                if (!File.Exists(stagedExecutable))
+                {
+                    throw new FileNotFoundException("The uploaded update does not contain the application executable.", stagedExecutable);
+                }
+
+                var service = WindowsServiceHelpers.IsWindowsService();
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = stagedExecutable,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = stagingDirectory
+                };
+                startInfo.ArgumentList.Add("apply-update");
+                startInfo.ArgumentList.Add("--source");
+                startInfo.ArgumentList.Add(stagingDirectory);
+                startInfo.ArgumentList.Add("--target");
+                startInfo.ArgumentList.Add(AppContext.BaseDirectory);
+                startInfo.ArgumentList.Add("--process-id");
+                startInfo.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                startInfo.ArgumentList.Add("--port");
+                startInfo.ArgumentList.Add(port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (service)
+                {
+                    startInfo.ArgumentList.Add("--service");
+                }
+
+                Process.Start(startInfo)?.Dispose();
+                stagingDirectory = null;
+                await WritePushResultAsync(context, $"Update {version} uploaded. Restarting remote service.", context.RequestAborted);
+                context.Response.OnCompleted(() =>
+                {
+                    app.Lifetime.StopApplication();
+                    return Task.CompletedTask;
+                });
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+            {
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                }
+
+                await WritePushResultAsync(context, exception.ToString(), context.RequestAborted);
+                await context.Request.Body.CopyToAsync(Stream.Null, context.RequestAborted);
+            }
+            finally
+            {
+                if (stagingDirectory is not null && Directory.Exists(stagingDirectory))
+                {
+                    Directory.Delete(stagingDirectory, true);
+                }
+            }
         });
     }
 

@@ -22,7 +22,7 @@ internal sealed class PushCommand : ICommandHandler
 
     public async Task<int> RunAsync()
     {
-        await PushClient.PushAsync(ServerAddressResolver.Resolve(Server), Source, Target, Mode);
+        await PushClient.PushAsync(ServerAddressResolver.Resolve(Server), Source, Target, Mode, Console.Out);
         return 0;
     }
 }

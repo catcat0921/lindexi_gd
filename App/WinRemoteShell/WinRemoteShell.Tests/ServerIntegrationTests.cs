@@ -368,6 +368,62 @@ public sealed class ServerIntegrationTests
     }
 
     [TestMethod]
+    public async Task WhenDirectoryIsPushedToCurrentDirectoryThenRemoteWorkingDirectoryIsUsed()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var remoteWorkingDirectory = Path.Combine(root, "remote");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(remoteWorkingDirectory);
+        await File.WriteAllTextAsync(Path.Combine(source, "content.txt"), "remote content");
+        await ChangeDirectoryClient.ChangeAsync(host.Address, remoteWorkingDirectory);
+
+        await PushClient.PushAsync(host.Address, source, ".");
+
+        Assert.AreEqual("remote content", await File.ReadAllTextAsync(Path.Combine(remoteWorkingDirectory, "content.txt")));
+    }
+
+    [TestMethod]
+    public async Task WhenDirectoryIsPushedThenEachTransferredEntryIsReported()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var remote = Path.Combine(root, "remote");
+        Directory.CreateDirectory(Path.Combine(source, "nested"));
+        await File.WriteAllTextAsync(Path.Combine(source, "first.txt"), "first");
+        await File.WriteAllTextAsync(Path.Combine(source, "nested", "second.txt"), "second");
+        using var output = new StringWriter();
+
+        await PushClient.PushAsync(host.Address, source, remote, PushMode.Merge, output);
+
+        StringAssert.Contains(output.ToString(), $"File: {Path.Combine(remote, "first.txt")}");
+        StringAssert.Contains(output.ToString(), $"File: {Path.Combine(remote, "nested", "second.txt")}");
+        StringAssert.Contains(output.ToString(), $"Directory: {remote}");
+    }
+
+    [TestMethod]
+    public async Task WhenPushFailsOnServerThenCompleteServerExceptionIsReported()
+    {
+        await using var host = await TestServerHost.StartAsync();
+        var root = Path.Combine(Path.GetTempPath(), $"WinRemoteShell_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var source = Path.Combine(root, "source.txt");
+        var remoteDirectory = Path.Combine(root, "remote");
+        await File.WriteAllTextAsync(source, "content");
+        Directory.CreateDirectory(remoteDirectory);
+        using var output = new StringWriter();
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            PushClient.PushAsync(host.Address, source, remoteDirectory, PushMode.Merge, output));
+
+        Assert.AreEqual(HttpStatusCode.InternalServerError, exception.StatusCode);
+        StringAssert.Contains(output.ToString(), "System.UnauthorizedAccessException");
+        StringAssert.Contains(output.ToString(), remoteDirectory);
+    }
+
+    [TestMethod]
     public async Task WhenConsoleInputBlocksWaitingForNextLineThenShellOutputIsStillReturned()
     {
         await using var host = await TestServerHost.StartAsync();

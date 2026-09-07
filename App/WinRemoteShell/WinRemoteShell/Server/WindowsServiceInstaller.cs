@@ -29,6 +29,9 @@ internal static class WindowsServiceInstaller
         await RunServiceControlAsync(["delete", ServiceName], cancellationToken);
     }
 
+    internal static Task StopAsync(CancellationToken cancellationToken = default) =>
+        RunServiceControlAsync(["stop", ServiceName], cancellationToken, 1062);
+
     private static async Task RunServiceControlAsync(
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,

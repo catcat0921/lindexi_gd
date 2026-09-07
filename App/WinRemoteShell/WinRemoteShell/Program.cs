@@ -10,6 +10,8 @@ await commandLine
     .AddHandler<ShellCommand>()
     .AddHandler<PushCommand>()
     .AddHandler<PullCommand>()
+    .AddHandler<UpdateCommand>()
+    .AddHandler<ApplyUpdateCommand>()
     .AddHandler<ScreenshotCommand>()
     .AddHandler<ProcessListCommand>()
     .AddHandler<KillCommand>()
