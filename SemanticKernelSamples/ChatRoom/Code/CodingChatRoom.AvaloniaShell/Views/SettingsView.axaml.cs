@@ -2,7 +2,9 @@ using System;
 using System.Diagnostics;
 
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 
 using CodingChatRoom.AvaloniaShell.ViewModels;
 
@@ -30,6 +32,15 @@ public partial class SettingsView : UserControl
         }
     }
 
+    private void OnImportModelsClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button
+            && button.FindAncestorOfType<Border>()?.FindDescendantOfType<OpenAIModelCatalogView>() is { } catalogView)
+        {
+            catalogView.LoadModels(button, e);
+        }
+    }
+
     private async void OnInstallOrUpdateLanguageServerClick(object? sender, RoutedEventArgs e)
     {
         try
@@ -54,5 +65,17 @@ public partial class SettingsView : UserControl
         {
             // 忽略
         }
+    }
+
+    private async void OnCopyLanguageServerInstallCommandClick(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        var dataTransfer = new DataTransfer();
+        dataTransfer.Add(DataTransferItem.CreateText("dotnet tool update -g roslyn-language-server"));
+        await clipboard.SetDataAsync(dataTransfer);
     }
 }

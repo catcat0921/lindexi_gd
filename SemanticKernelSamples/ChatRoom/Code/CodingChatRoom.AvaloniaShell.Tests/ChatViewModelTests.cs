@@ -522,7 +522,7 @@ public sealed class ChatViewModelTests
         await WaitUntilAsync(() => viewModel.NextRunWorkspacePath is not null);
 
         Assert.AreEqual(Path.GetFullPath(workspacePath), viewModel.NextRunWorkspacePath);
-        StringAssert.Contains(viewModel.WorkspaceStatusText, "已设置");
+        Assert.AreEqual($"工作路径：{Path.GetFullPath(workspacePath)}", viewModel.WorkspaceStatusText);
         Assert.IsTrue(viewModel.CanApplyWorkspace);
     }
 
@@ -615,8 +615,7 @@ public sealed class ChatViewModelTests
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken)
         {
             RunCount++;
@@ -634,8 +633,7 @@ public sealed class ChatViewModelTests
         public Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken) =>
             Task.FromException<CodingAgentRunResult>(exception);
     }
@@ -657,14 +655,13 @@ public sealed class ChatViewModelTests
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken)
         {
             RunCount++;
             CancellationToken = cancellationToken;
             ObservedContents = contents;
-            ObservedAutomaticCompressionEnabled = enableAutomaticCompression;
+            ObservedAutomaticCompressionEnabled = options.EnableAutomaticCompression;
             await manager.AppendMessageAsync(CopilotChatMessage.CreateUser(contents), cancellationToken);
             var assistantMessage = CopilotChatMessage.CreateAssistant(CopilotChatMessage.PlaceholderContent, isPresetInfo: false);
             await manager.SelectedSession.AddMessageAsync(assistantMessage);
@@ -692,8 +689,7 @@ public sealed class ChatViewModelTests
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken)
         {
             CancellationToken = cancellationToken;

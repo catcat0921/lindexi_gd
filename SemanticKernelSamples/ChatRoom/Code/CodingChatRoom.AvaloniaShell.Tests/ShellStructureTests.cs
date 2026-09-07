@@ -97,6 +97,17 @@ public sealed class ShellStructureTests
         Assert.IsNotNull(comboBoxField);
     }
 
+    [TestMethod(DisplayName = "聊天视图应包含思考强度下拉框")]
+    [Timeout(5000)]
+    public void ChatViewShouldContainReasoningEffortSelector()
+    {
+        FieldInfo? comboBoxField = typeof(ChatView).GetField(
+            "ReasoningEffortSelector",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.IsNotNull(comboBoxField);
+    }
+
     [TestMethod(DisplayName = "聊天视图应包含自动压缩勾选框")]
     [Timeout(5000)]
     public void ChatViewShouldContainAutomaticCompressionCheckBox()
@@ -115,6 +126,18 @@ public sealed class ShellStructureTests
         var viewModel = new ChatViewModel();
 
         Assert.IsTrue(viewModel.IsAutomaticCompressionEnabled);
+    }
+
+    [TestMethod(DisplayName = "聊天视图模型应提供固定思考强度并默认使用模型设置")]
+    [Timeout(5000)]
+    public void ChatViewModelShouldProvideReasoningEffortsWithDefaultSelection()
+    {
+        var viewModel = new ChatViewModel();
+
+        CollectionAssert.AreEqual(
+            new[] { "默认", "低", "中", "高" },
+            viewModel.AvailableReasoningEfforts.Select(option => option.DisplayName).ToArray());
+        Assert.IsNull(viewModel.SelectedReasoningEffort?.Value);
     }
 
     [TestMethod(DisplayName = "窗口标题应显示已提交的工作路径")]

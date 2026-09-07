@@ -64,7 +64,9 @@ public sealed class CodingChatSendingTests
         var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
 
-        Task sendTask = application.SendMessageAsync("检查代码", enableAutomaticCompression: false);
+        Task sendTask = application.SendMessageAsync(
+            "检查代码",
+            new CodingChatRunOptions(false, false, null));
         await runner.Started.Task;
 
         Assert.IsFalse(runner.ObservedAutomaticCompressionEnabled);
@@ -81,10 +83,31 @@ public sealed class CodingChatSendingTests
         var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
         await application.InitializeAsync();
 
-        Task sendTask = application.SendMessageAsync("运行应用", enableDotNetRun: true);
+        Task sendTask = application.SendMessageAsync(
+            "运行应用",
+            new CodingChatRunOptions(true, true, null));
         await runner.Started.Task;
 
         Assert.IsTrue(runner.ObservedDotNetRunEnabled);
+        runner.Complete("完成");
+        await sendTask;
+    }
+
+    [TestMethod(DisplayName = "发送应把思考强度传递给运行器")]
+    [Timeout(5000)]
+    public async Task SendMessageAsyncShouldPassReasoningEffortToRunner()
+    {
+        var manager = new CopilotChatManager();
+        var runner = new TestCodingChatRunner(manager);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(), runner);
+        await application.InitializeAsync();
+
+        Task sendTask = application.SendMessageAsync(
+            "深入检查代码",
+            new CodingChatRunOptions(true, false, ReasoningEffort.High));
+        await runner.Started.Task;
+
+        Assert.AreEqual(ReasoningEffort.High, runner.ObservedReasoningEffort);
         runner.Complete("完成");
         await sendTask;
     }
@@ -320,6 +343,8 @@ public sealed class CodingChatSendingTests
 
         public bool ObservedDotNetRunEnabled { get; private set; }
 
+        public ReasoningEffort? ObservedReasoningEffort { get; private set; }
+
         public IReadOnlyList<AIContent>? ObservedContents { get; private set; }
 
         public IReadOnlyList<AIContent>? InjectedContents { get; private set; }
@@ -329,8 +354,7 @@ public sealed class CodingChatSendingTests
         public async Task<CodingAgentRunResult> RunAsync(
             IReadOnlyList<AIContent> contents,
             string? workspacePath,
-            bool enableAutomaticCompression,
-            bool enableDotNetRun,
+            CodingChatRunOptions options,
             CancellationToken cancellationToken)
         {
             RunCount++;
@@ -342,8 +366,9 @@ public sealed class CodingChatSendingTests
 
             ObservedContents = contents;
             ObservedWorkspacePath = workspacePath;
-            ObservedAutomaticCompressionEnabled = enableAutomaticCompression;
-            ObservedDotNetRunEnabled = enableDotNetRun;
+            ObservedAutomaticCompressionEnabled = options.EnableAutomaticCompression;
+            ObservedDotNetRunEnabled = options.EnableDotNetRun;
+            ObservedReasoningEffort = options.ReasoningEffort;
             ObservedCancellationToken = cancellationToken;
             var userMessage = CopilotChatMessage.CreateUser(contents);
             await manager.AppendMessageAsync(userMessage, cancellationToken);
