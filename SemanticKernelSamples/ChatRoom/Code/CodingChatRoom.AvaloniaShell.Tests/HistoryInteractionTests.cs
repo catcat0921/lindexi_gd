@@ -142,6 +142,57 @@ public sealed class HistoryInteractionTests
         Assert.AreEqual(1, vm.Sessions.Count(item => item.SessionId == store.Session.SessionId));
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void HistoryNavigationShouldRemainEnabledWhileLoading(bool taskHistory)
+    {
+        var store = new StreamingStore();
+        var shell = new MainViewModel(CreateViewModel(store), new ChatViewModel());
+        var command = taskHistory ? shell.OpenTaskHistoryCommand : shell.OpenHistoryCommand;
+        try
+        {
+            command.Execute(null);
+            shell.CloseHistoryCommand.Execute(null);
+            Assert.IsTrue(command.CanExecute(null));
+        }
+        finally { store.Continue.TrySetResult(); }
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public void HistoryNavigationShouldReopenBeforeLoadingCompletes(bool taskHistory)
+    {
+        var store = new StreamingStore();
+        var shell = new MainViewModel(CreateViewModel(store), new ChatViewModel());
+        var command = taskHistory ? shell.OpenTaskHistoryCommand : shell.OpenHistoryCommand;
+        try
+        {
+            command.Execute(null);
+            shell.CloseHistoryCommand.Execute(null);
+            command.Execute(null);
+            Assert.IsTrue(shell.IsHistoryOpen);
+        }
+        finally { store.Continue.TrySetResult(); }
+    }
+
+    [TestMethod]
+    public void ReenteringHistoryDuringLoadingShouldNotStartDuplicateRead()
+    {
+        var store = new StreamingStore();
+        var shell = new MainViewModel(CreateViewModel(store), new ChatViewModel());
+        try
+        {
+            shell.OpenHistoryCommand.Execute(null);
+            shell.CloseHistoryCommand.Execute(null);
+            shell.OpenHistoryCommand.Execute(null);
+            shell.OpenTaskHistoryCommand.Execute(null);
+            Assert.AreEqual(1, store.LoadCount);
+        }
+        finally { store.Continue.TrySetResult(); }
+    }
+
     private static SessionListViewModel CreateViewModel(StreamingStore store) => new(
         CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), store));
 

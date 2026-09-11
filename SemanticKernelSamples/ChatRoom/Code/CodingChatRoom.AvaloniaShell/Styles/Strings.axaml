@@ -7,7 +7,6 @@
         <sys:String x:Key="WelcomeDescriptionText">选择工作目录与模型，描述目标，让编程助手与你一起完成。</sys:String>
         <sys:String x:Key="WelcomeExamplesText">理解项目结构　·　排查代码问题　·　实现新的功能</sys:String>
         <sys:String x:Key="WorkTaskText">工作任务</sys:String>
-        <sys:String x:Key="WorkTasksText">我的工作任务</sys:String>
         <sys:String x:Key="NewWorkTaskText">新建工作任务</sys:String>
         <sys:String x:Key="ProductSubtitleText">专注每一个编程任务</sys:String>
         <sys:String x:Key="AllSessionsText">全部历史会话</sys:String>
@@ -18,7 +17,7 @@
         <sys:String x:Key="WorkDirectoryText">工作目录</sys:String>
         <sys:String x:Key="ModelText">模型</sys:String>
         <sys:String x:Key="ReasoningEffortText">思考强度</sys:String>
-        <sys:String x:Key="InputShortcutText">Ctrl + Enter 发送 · Shift + Enter 换行</sys:String>
+        <sys:String x:Key="InputShortcutText">Ctrl + Enter 发送 · Enter 换行</sys:String>
         <sys:String x:Key="ApplicationTitle">CodingChatRoom 编程助手</sys:String>
         <sys:String x:Key="SessionListTitle">历史会话</sys:String>
         <sys:String x:Key="CurrentSessionText">当前会话</sys:String>
@@ -31,6 +30,7 @@
         <sys:String x:Key="OpenSessionText">切换到会话</sys:String>
         <sys:String x:Key="DeleteSessionText">删除</sys:String>
         <sys:String x:Key="SaveTitleText">保存</sys:String>
+        <sys:String x:Key="ConfirmTaskNameText">确定</sys:String>
         <sys:String x:Key="CancelEditText">取消</sys:String>
         <sys:String x:Key="RefreshHistoryText">刷新</sys:String>
         <sys:String x:Key="SettingsNavigationText">设置</sys:String>

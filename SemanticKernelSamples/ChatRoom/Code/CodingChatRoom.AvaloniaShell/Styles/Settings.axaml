@@ -1,8 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <Color x:Key="SettingsBackgroundColor">#F5F7FA</Color>
-        <Color x:Key="SettingsHeaderColor">#FCFDFE</Color>
+        <Color x:Key="SettingsBackgroundColor">#00FFFFFF</Color>
+        <Color x:Key="SettingsHeaderColor">#00FFFFFF</Color>
         <Color x:Key="SettingsCardBorderColor">#E4E9F0</Color>
         <Color x:Key="SettingsMutedSurfaceColor">#F8FAFC</Color>
         <Color x:Key="SettingsAccentSurfaceColor">#EEF6FF</Color>
@@ -39,19 +39,19 @@
         <Setter Property="BorderBrush" Value="{StaticResource SettingsCardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="12" />
-        <Setter Property="BoxShadow" Value="0 2 8 0 #0D18324A" />
+        <Setter Property="BoxShadow" Value="0 1 0 0 #08000000" />
     </Style>
     <Style Selector="Border.ProviderCard">
-        <Setter Property="Background" Value="{StaticResource SettingsMutedSurfaceBrush}" />
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="{StaticResource SettingsCardBorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="CornerRadius" Value="0" />
     </Style>
     <Style Selector="Border.ModelCard">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="#E6EBF1" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="#E5E5E5" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="CornerRadius" Value="0" />
     </Style>
     <Style Selector="Border.AvailableModelItem">
         <Setter Property="Padding" Value="10,4,4,4" />
@@ -65,10 +65,10 @@
         <Setter Property="MinHeight" Value="0" />
     </Style>
     <Style Selector="Border.PrimaryModelPanel">
-        <Setter Property="Background" Value="#F7FAFD" />
-        <Setter Property="BorderBrush" Value="#E1E8F0" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="9" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="#E5E5E5" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="CornerRadius" Value="0" />
     </Style>
     <Style Selector="Border.SectionIcon">
         <Setter Property="Width" Value="40" />
@@ -98,12 +98,12 @@
         <Setter Property="BorderThickness" Value="0,1,0,0" />
     </Style>
     <Style Selector="TextBlock.SettingsPageTitle">
-        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontSize" Value="28" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="#17212B" />
     </Style>
     <Style Selector="TextBlock.SettingsSectionTitle">
-        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="#17212B" />
     </Style>

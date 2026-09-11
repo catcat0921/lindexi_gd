@@ -118,7 +118,7 @@
                     <StackPanel Orientation="Horizontal"
                                 Spacing="8"
                                 IsVisible="{Binding CanRespondToApproval}">
-                        <Button Classes="Primary"
+                        <Button Classes="Primary accent"
                                 Content="同意"
                                 Click="ApproveToolButton_OnClick"
                                 CommandParameter="{Binding}" />
@@ -168,11 +168,10 @@
 
     <Grid RowDefinitions="Auto,*,Auto" Background="{StaticResource BackgroundBrush}">
         <Border Grid.Row="0"
-                Padding="28,12,28,14"
-                Background="#FFFFFF"
-                BorderBrush="#EEF1F6"
-                BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="7"
+                Margin="32,12,32,8" Padding="16,12"
+                CornerRadius="8" Background="#B3FFFFFF"
+                BorderBrush="#10000000" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,32" RowDefinitions="Auto,Auto" RowSpacing="7"
                   ColumnSpacing="16">
                 <TextBlock Text="{StaticResource WorkDirectoryText}" Classes="Subtitle" FontSize="11" />
                 <Grid Grid.Column="1" ColumnDefinitions="220,96" ColumnSpacing="8">
@@ -192,7 +191,7 @@
                     <Button Grid.Column="1"
                             MinWidth="72"
                             MinHeight="32"
-                            Classes="Primary"
+                            Classes="Primary accent"
                             Content="应用"
                             Command="{Binding ApplyWorkspaceCommand}"
                             IsEnabled="{Binding CanApplyWorkspace}" />
@@ -230,6 +229,11 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
+                <Button x:Name="TaskHistoryButton" Grid.Row="1" Grid.Column="2" Classes="Secondary" Width="32" Height="32" Padding="7" VerticalAlignment="Bottom"
+                        ToolTip.Tip="{StaticResource SessionListTitle}" AutomationProperties.Name="{StaticResource SessionListTitle}"
+                        Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).OpenTaskHistoryCommand}">
+                    <PathIcon Width="16" Height="16" Data="M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 M12,4 A8,8 0 1 1 12,20 A8,8 0 1 1 12,4 M11,6 L13,6 L13,12 L17,14 L16,16 L11,13 Z" />
+                </Button>
             </Grid>
         </Border>
 
@@ -332,10 +336,10 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Grid Grid.Row="2" Margin="28,8,28,18" MaxWidth="1000" RowDefinitions="Auto,Auto" RowSpacing="8">
-          <Border x:Name="ComposerPanel" Padding="16,14,16,10" CornerRadius="10"
-                Background="{StaticResource SurfaceBrush}" BorderBrush="#CCD8EE"
-                BorderThickness="1" BoxShadow="0 3 12 0 #060E284F">
+        <Grid Grid.Row="2" Margin="32,8,32,18" RowDefinitions="Auto,Auto" RowSpacing="8">
+          <Border x:Name="ComposerPanel" Classes="ComposerSurface" Padding="16,14,16,10" CornerRadius="8"
+                Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1">
             <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto" RowSpacing="8">
                 <ItemsControl Grid.Row="0"
                               Grid.Column="0"
@@ -375,15 +379,17 @@
                 </ItemsControl>
                 <Button Grid.Row="2"
                         Grid.Column="0"
-                        Classes="Flat"
+                        Classes="Secondary"
                         Content="{StaticResource AddImageText}"
                         Click="AddImageButton_OnClick" />
                 <TextBox Grid.Row="1" Grid.ColumnSpan="3" x:Name="MessageInputTextBox"
                          Classes="ComposerInput" Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
                          PlaceholderText="{StaticResource MessageInputPlaceholder}" />
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{StaticResource InputShortcutText}"
-                           Classes="Subtitle" Margin="12,0" VerticalAlignment="Center" />
-                <Button Grid.Row="2" Grid.Column="2" x:Name="SendButton" Classes="Primary" MinWidth="88"
+                           Classes="Subtitle" Margin="12,0" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+                <Button Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Classes="Danger" Content="{StaticResource StopText}"
+                        Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}" />
+                <Button Grid.Row="2" Grid.Column="2" x:Name="SendButton" Classes="Primary accent" MinWidth="88"
                         Command="{Binding SendCommand}" IsEnabled="{Binding CanSend}">
                     <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Width="14" Height="14" Data="M2,3 L22,12 L2,21 L6,13 L15,12 L6,11 Z" /><TextBlock Text="{Binding SendButtonText}" /></StackPanel>
                 </Button>
@@ -396,8 +402,10 @@
               <CheckBox x:Name="EnableDotNetRunCheckBox" Content="{StaticResource EnableDotNetRunText}" IsChecked="{Binding IsDotNetRunEnabled}" ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-              <Button x:Name="CompressConversationButton" Classes="Flat" Content="{StaticResource CompressConversationText}" Command="{Binding CompressConversationCommand}" IsEnabled="{Binding CanCompressConversation}" />
-              <Button x:Name="StopLanguageServerButton" Classes="Flat" Content="{StaticResource StopLanguageServerText}" Command="{Binding StopLanguageServerCommand}" ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
+              <Button x:Name="CompressConversationButton" Classes="Secondary" Content="{StaticResource CompressConversationText}" Command="{Binding CompressConversationCommand}" IsEnabled="{Binding CanCompressConversation}" />
+              <Button x:Name="StopLanguageServerButton" Classes="Secondary" Content="{StaticResource StopLanguageServerText}" Command="{Binding StopLanguageServerCommand}" ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
+              <Button x:Name="NewSessionButton" Classes="Secondary" Content="{StaticResource NewSessionText}"
+                      Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).SessionListViewModel.CreateNewSessionCommand}" />
             </StackPanel>
           </Grid>
         </Grid>

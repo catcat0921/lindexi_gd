@@ -28,12 +28,23 @@ public sealed class MainViewModel : ViewModelBase
         WorkTasks.Add(_activeWorkTask);
         Subscribe(_activeWorkTask);
         OpenSettingsCommand = new SimpleAsyncCommand(OpenSettingsAsync, () => _settingsViewModel is not null);
-        OpenHistoryCommand = new SimpleAsyncCommand(() => OpenHistoryAsync(false));
-        OpenTaskHistoryCommand = new SimpleAsyncCommand(() => OpenHistoryAsync(true));
+        OpenHistoryCommand = new SimpleAsyncCommand(() => OpenHistoryAsync(false), allowConcurrentExecutions: true);
+        OpenTaskHistoryCommand = new SimpleAsyncCommand(() => OpenHistoryAsync(true), allowConcurrentExecutions: true);
         CloseHistoryCommand = new SimpleCommand(() => { IsHistoryOpen = false; IsSettingsOpen = false; });
         CreateWorkTaskCommand = new SimpleAsyncCommand(CreateWorkTaskAsync, () => _createRuntimeAsync is not null);
         ActivateWorkTaskCommand = new SimpleCommand<WorkTaskItemViewModel>(task => { if (task is not null) Activate(task); });
-        RenameWorkTaskCommand = new SimpleCommand<WorkTaskItemViewModel>(task => { if (task is not null) task.IsEditing = !task.IsEditing; });
+        RenameWorkTaskCommand = new SimpleCommand<WorkTaskItemViewModel>(task =>
+        {
+            if (task is null) return;
+            task.EditedDisplayName = task.DisplayName;
+            task.IsEditing = true;
+        });
+        SaveWorkTaskNameCommand = new SimpleCommand<WorkTaskItemViewModel>(task =>
+        {
+            if (task is null || string.IsNullOrWhiteSpace(task.EditedDisplayName)) return;
+            task.DisplayName = task.EditedDisplayName;
+            task.IsEditing = false;
+        });
         DeleteWorkTaskCommand = new SimpleAsyncCommand<WorkTaskItemViewModel>(DeleteTaskAsync, task => task is not null && !task.IsWorking && WorkTasks.Count > 1);
     }
 
@@ -66,6 +77,8 @@ public sealed class MainViewModel : ViewModelBase
     public ICommand ActivateWorkTaskCommand { get; }
     /// <summary>编辑任务名。</summary>
     public ICommand RenameWorkTaskCommand { get; }
+    /// <summary>确认任务名称并退出编辑。</summary>
+    public ICommand SaveWorkTaskNameCommand { get; }
     /// <summary>删除空闲任务，不删除历史文件。</summary>
     public ICommand DeleteWorkTaskCommand { get; }
     /// <summary>打开全部历史。</summary>

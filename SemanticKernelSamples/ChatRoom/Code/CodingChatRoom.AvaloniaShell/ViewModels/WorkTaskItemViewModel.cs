@@ -12,6 +12,7 @@ public sealed class WorkTaskItemViewModel : ViewModelBase
     private string _displayName;
     private bool _isActive;
     private bool _isEditing;
+    private string _editedDisplayName = string.Empty;
 
     internal WorkTaskItemViewModel(string name, ChatViewModel chat, SessionListViewModel sessions, CodingChatRuntime? runtime = null)
     {
@@ -34,6 +35,8 @@ public sealed class WorkTaskItemViewModel : ViewModelBase
     public bool IsActive { get => _isActive; internal set => SetField(ref _isActive, value); }
     /// <summary>获取或设置名称编辑状态。</summary>
     public bool IsEditing { get => _isEditing; set => SetField(ref _isEditing, value); }
+    /// <summary>获取或设置待确认的任务名称。</summary>
+    public string EditedDisplayName { get => _editedDisplayName; set => SetField(ref _editedDisplayName, value); }
     /// <summary>获取包含压缩阶段的任务活动状态。</summary>
     public bool IsWorking => Chat.IsRunning || Chat.IsCompressing || Chat.IsChangingWorkspace;
     internal CodingChatRuntime? Runtime { get; }

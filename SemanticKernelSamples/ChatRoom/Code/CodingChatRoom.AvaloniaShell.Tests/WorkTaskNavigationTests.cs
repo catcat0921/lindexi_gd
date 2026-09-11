@@ -6,6 +6,47 @@ namespace CodingChatRoom.AvaloniaShell.Tests;
 public sealed class WorkTaskNavigationTests
 {
     [TestMethod]
+    public void EditingTaskNameShouldNotCommitUntilConfirmed()
+    {
+        var shell = new MainViewModel();
+        var task = shell.ActiveWorkTask;
+        string original = task.DisplayName;
+        shell.RenameWorkTaskCommand.Execute(task);
+        task.EditedDisplayName = "New task";
+        Assert.AreEqual(original, task.DisplayName);
+    }
+
+    [TestMethod]
+    public void ConfirmingTaskNameShouldSaveTrimmedName()
+    {
+        var shell = new MainViewModel();
+        var task = shell.ActiveWorkTask;
+        shell.RenameWorkTaskCommand.Execute(task);
+        task.EditedDisplayName = "  New task  ";
+        shell.SaveWorkTaskNameCommand.Execute(task);
+        Assert.AreEqual("New task", task.DisplayName);
+    }
+
+    [TestMethod]
+    public void ConfirmingTaskNameShouldCloseEditor()
+    {
+        var shell = new MainViewModel();
+        shell.RenameWorkTaskCommand.Execute(shell.ActiveWorkTask);
+        shell.SaveWorkTaskNameCommand.Execute(shell.ActiveWorkTask);
+        Assert.IsFalse(shell.ActiveWorkTask.IsEditing);
+    }
+
+    [TestMethod]
+    public void EmptyTaskNameShouldKeepEditorOpen()
+    {
+        var shell = new MainViewModel();
+        shell.RenameWorkTaskCommand.Execute(shell.ActiveWorkTask);
+        shell.ActiveWorkTask.EditedDisplayName = " ";
+        shell.SaveWorkTaskNameCommand.Execute(shell.ActiveWorkTask);
+        Assert.IsTrue(shell.ActiveWorkTask.IsEditing);
+    }
+
+    [TestMethod]
     public void SwitchingTasksShouldPreserveTheOriginalDraft()
     {
         var shell = new MainViewModel();

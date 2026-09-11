@@ -5,7 +5,7 @@
              x:Class="CodingChatRoom.AvaloniaShell.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
     <Grid RowDefinitions="Auto,*,Auto" Background="{StaticResource SettingsBackgroundBrush}">
-        <Border Grid.Row="0" Classes="SettingsHeader" Padding="20,14">
+        <Border Grid.Row="0" Classes="SettingsHeader" Padding="32,24,32,16">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="20" HorizontalAlignment="Stretch">
                 <Button Classes="SettingsBack"
                         Content="← 返回聊天"
@@ -18,7 +18,7 @@
                     <TextBlock Text="模型服务与隔离执行环境" Classes="Subtitle" />
                 </StackPanel>
                 <Button Grid.Column="2"
-                        Classes="Primary SaveSettings"
+                        Classes="Primary accent SaveSettings"
                         Content="保存更改"
                         Command="{Binding SaveCommand}"
                         IsEnabled="{Binding !IsBusy}"
@@ -28,8 +28,8 @@
         </Border>
 
         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="20,24,20,40"
-                        Spacing="16"
+            <StackPanel Margin="32,8,32,32" MaxWidth="1120"
+                        Spacing="8"
                         HorizontalAlignment="Stretch">
                 <Border Classes="SettingsIntro" Padding="18" IsVisible="False">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
@@ -160,7 +160,7 @@
                                         Orientation="Horizontal"
                                         Spacing="8"
                                         VerticalAlignment="Center">
-                                <Button Classes="Primary"
+                                <Button Classes="Primary accent"
                                         Content="{StaticResource InstallOrUpdateLanguageServerText}"
                                         Click="OnInstallOrUpdateLanguageServerClick" />
                                 <Button Content="{StaticResource CopyLanguageServerInstallCommandText}"
