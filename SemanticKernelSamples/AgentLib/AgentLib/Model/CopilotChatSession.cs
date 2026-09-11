@@ -12,7 +12,6 @@ namespace AgentLib.Model;
 /// </summary>
 public sealed class CopilotChatSession : NotifyBase
 {
-    private const int MaxTitleLength = 20;
     private string _title = "新会话";
     private TitleSource _titleSource;
     private AgentSession? _agentSession;
@@ -46,6 +45,11 @@ public sealed class CopilotChatSession : NotifyBase
     /// 会话唯一标识符。
     /// </summary>
     public Guid SessionId { get; }
+
+    /// <summary>
+    /// 获取或设置会话最近一次运行的工作路径。
+    /// </summary>
+    public string? WorkspacePath { get; set; }
 
     /// <summary>
     /// 会话开始时间。
@@ -162,9 +166,7 @@ public sealed class CopilotChatSession : NotifyBase
         }
 
         _titleSource = source;
-        Title = title.Length <= MaxTitleLength
-            ? title
-            : $"{title[..MaxTitleLength]}...";
+        Title = title;
     }
 
     private void TryUpdateTitle(CopilotChatMessage chatMessage)
@@ -192,11 +194,6 @@ public sealed class CopilotChatSession : NotifyBase
         }
 
         string title = string.Join(" ", content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        if (title.Length <= MaxTitleLength)
-        {
-            return title;
-        }
-
-        return $"{title[..MaxTitleLength]}...";
+        return title;
     }
 }

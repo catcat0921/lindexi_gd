@@ -1,207 +1,272 @@
 using System;
-using System.Collections.Specialized;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-
 using AgentLib.Logging;
-
 using CodingChatRoom.AvaloniaShell.Services;
 
 namespace CodingChatRoom.AvaloniaShell.ViewModels;
 
 /// <summary>
-/// 表示左侧历史会话列表。
+/// 提供按需加载、搜索和管理历史会话的页面。
 /// </summary>
 public sealed class SessionListViewModel : ViewModelBase
 {
     private readonly CodingChatApplication? _application;
+    private string _searchText = string.Empty;
+    private string? _errorMessage;
+    private bool _isLoading;
+    private bool _hasLoaded;
+    private readonly System.Collections.Generic.Dictionary<Guid, SessionItemViewModel> _items = [];
+    private bool _isOperating;
     private readonly SimpleAsyncCommand _createNewSessionCommand;
     private readonly SimpleAsyncCommand<SessionItemViewModel> _openSessionCommand;
     private readonly SimpleAsyncCommand<SessionItemViewModel> _deleteSessionCommand;
-    private SessionItemViewModel? _selectedSession;
+    private readonly SimpleAsyncCommand<SessionItemViewModel> _saveTitleCommand;
 
     /// <summary>
-    /// 初始化空会话列表骨架。
+    /// 初始化空页面。
     /// </summary>
     public SessionListViewModel()
     {
-        _createNewSessionCommand = new SimpleAsyncCommand(static () => Task.CompletedTask, static () => false);
-        _openSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(static _ => Task.CompletedTask, static _ => false);
-        _deleteSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(static _ => Task.CompletedTask, static _ => false);
+        _createNewSessionCommand = new SimpleAsyncCommand(() => RunOperationAsync(async () =>
+        {
+            if (_application is null) return;
+            await _application.CreateNewSessionAsync();
+            SessionOpened?.Invoke(this, EventArgs.Empty);
+        }), () => CanChangeSession);
+        _openSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
+        {
+            if (_application is null || item is null) return;
+            await _application.OpenSessionAsync(item.SessionId);
+            SessionOpened?.Invoke(this, EventArgs.Empty);
+        }), CanExecute);
+        _deleteSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
+        {
+            if (_application is not null && item is not null)
+                await _application.DeleteSessionAsync(item.SessionId);
+        }), CanExecute);
+        _saveTitleCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
+        {
+            if (_application is not null && item is not null && !string.IsNullOrWhiteSpace(item.EditedTitle))
+            {
+                await _application.RenameSessionAsync(item.SessionId, item.EditedTitle);
+                item.IsEditing = false;
+            }
+        }), CanExecute);
+        EditTitleCommand = new SimpleCommand<SessionItemViewModel>(item =>
+        {
+            if (item is null) return;
+            item.EditedTitle = item.Title;
+            item.IsEditing = true;
+        }, CanExecute);
+        CancelEditCommand = new SimpleCommand<SessionItemViewModel>(item =>
+        {
+            if (item is not null) item.IsEditing = false;
+        });
+        ReloadCommand = new SimpleAsyncCommand(() => LoadCoreAsync(), () => !IsLoading);
     }
 
-    internal SessionListViewModel(CodingChatApplication application)
+    internal SessionListViewModel(CodingChatApplication application) : this()
     {
         ArgumentNullException.ThrowIfNull(application);
         _application = application;
-        _createNewSessionCommand = new SimpleAsyncCommand(CreateNewSessionAsync, () => CanChangeSession);
-        _openSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(OpenSessionAsync, CanExecuteSessionCommand);
-        _deleteSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(DeleteSessionAsync, CanExecuteSessionCommand);
-        _application.Sessions.CollectionChanged += OnSessionsCollectionChanged;
-        _application.StateChanged += OnApplicationStateChanged;
+        application.Sessions.CollectionChanged += (_, _) => Refresh();
+        application.StateChanged += (_, _) => UpdateState();
         Refresh();
     }
 
-    /// <summary>
-    /// 获取会话列表项。
-    /// </summary>
+    internal event EventHandler? SessionOpened;
+
     public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
-
-    /// <summary>
-    /// 获取当前是否没有可显示的历史会话。
-    /// </summary>
-    public bool IsEmpty => Sessions.Count == 0;
-
-    public SessionItemViewModel? SelectedSession
+    public bool IsEmpty => !IsLoading && Sessions.Count == 0;
+    public bool CanChangeSession => (_application?.CanChangeSession ?? false) && !_isOperating;
+    public SessionItemViewModel? SelectedSession => Sessions.FirstOrDefault(item => item.SessionId == _application?.SelectedSessionId);
+    public string SearchText
     {
-        get => _selectedSession;
-        private set => SetField(ref _selectedSession, value);
+        get => _searchText;
+        set { if (SetField(ref _searchText, value)) Refresh(); }
     }
-
-    public bool CanChangeSession => _application?.CanChangeSession ?? false;
-
-    /// <summary>
-    /// 获取新建会话命令。
-    /// </summary>
+    public bool IsLoading
+    {
+        get => _isLoading;
+        private set { if (SetField(ref _isLoading, value)) UpdateState(); }
+    }
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetField(ref _errorMessage, value);
+    }
     public ICommand CreateNewSessionCommand => _createNewSessionCommand;
-
     public ICommand OpenSessionCommand => _openSessionCommand;
-
     public ICommand DeleteSessionCommand => _deleteSessionCommand;
+    public ICommand SaveTitleCommand => _saveTitleCommand;
+    public ICommand EditTitleCommand { get; }
+    public ICommand CancelEditCommand { get; }
+    public ICommand ReloadCommand { get; }
 
-    private async Task CreateNewSessionAsync()
+    /// <summary>
+    /// 进入页面时在后台读取历史摘要。
+    /// </summary>
+    public Task LoadAsync() => _hasLoaded ? Task.CompletedTask : LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
     {
-        await _application!.CreateNewSessionAsync().ConfigureAwait(true);
-        Refresh();
-    }
-
-    private async Task OpenSessionAsync(SessionItemViewModel? session)
-    {
-        if (session is null)
-        {
-            return;
-        }
-
-        SessionItemViewModel? previousSelection = SelectedSession;
+        if (_application is null || IsLoading) return;
+        IsLoading = true;
+        ErrorMessage = null;
         try
         {
-            await _application!.OpenSessionAsync(session.SessionId).ConfigureAwait(true);
+            await _application.InitializeAsync();
+            _hasLoaded = true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or System.Xml.XmlException)
+        {
+            Trace.TraceError(exception.ToString());
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task RunOperationAsync(Func<Task> operation)
+    {
+        _isOperating = true;
+        ErrorMessage = null;
+        UpdateState();
+        try
+        {
+            await operation();
             Refresh();
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or System.Xml.XmlException)
         {
-            SelectedSession = previousSelection;
-            throw;
+            Trace.TraceError(exception.ToString());
+            ErrorMessage = exception.Message;
+        }
+        finally
+        {
+            _isOperating = false;
+            UpdateState();
         }
     }
 
-    private async Task DeleteSessionAsync(SessionItemViewModel? session)
-    {
-        if (session is null)
-        {
-            return;
-        }
-
-        await _application!.DeleteSessionAsync(session.SessionId).ConfigureAwait(true);
-        Refresh();
-    }
-
-    private bool CanExecuteSessionCommand(SessionItemViewModel? session)
-        => session is not null && CanChangeSession;
-
-    private void OnSessionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is not null)
-        {
-            int index = e.NewStartingIndex;
-            foreach (CopilotChatSessionSummary summary in e.NewItems)
-            {
-                Sessions.Insert(index++, new SessionItemViewModel(summary));
-            }
-        }
-        else if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems is not null)
-        {
-            foreach (CopilotChatSessionSummary summary in e.OldItems)
-            {
-                SessionItemViewModel? item = Sessions.FirstOrDefault(candidate => candidate.SessionId == summary.SessionId);
-                if (item is not null)
-                {
-                    Sessions.Remove(item);
-                }
-            }
-        }
-        else
-        {
-            Refresh();
-            return;
-        }
-
-        UpdateState();
-    }
-
-    private void OnApplicationStateChanged(object? sender, EventArgs e)
-    {
-        UpdateState();
-    }
+    private bool CanExecute(SessionItemViewModel? item) => item is not null && CanChangeSession;
 
     private void Refresh()
     {
-        if (_application is null)
-        {
-            return;
-        }
-
-        Sessions.Clear();
+        if (_application is null) return;
+        string query = SearchText.Trim();
+        var activeIds = _application.Sessions.Select(summary => summary.SessionId).ToHashSet();
+        foreach (Guid id in _items.Keys.Where(id => !activeIds.Contains(id)).ToArray()) _items.Remove(id);
+        var visible = new System.Collections.Generic.List<SessionItemViewModel>();
         foreach (CopilotChatSessionSummary summary in _application.Sessions)
         {
-            Sessions.Add(new SessionItemViewModel(summary));
+            if (!_items.TryGetValue(summary.SessionId, out var item))
+            {
+                item = new SessionItemViewModel(summary);
+                _items.Add(summary.SessionId, item);
+            }
+            else
+            {
+                item.Update(summary);
+            }
+            if (query.Length == 0 || summary.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || (summary.WorkspacePath?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                visible.Add(item);
         }
-
+        var visibleIds = visible.Select(item => item.SessionId).ToHashSet();
+        for (int index = Sessions.Count - 1; index >= 0; index--)
+            if (!visibleIds.Contains(Sessions[index].SessionId)) Sessions.RemoveAt(index);
+        for (int index = 0; index < visible.Count; index++)
+        {
+            var item = visible[index];
+            int previousIndex = Sessions.IndexOf(item);
+            if (previousIndex < 0) Sessions.Insert(index, item);
+            else if (previousIndex != index) Sessions.Move(previousIndex, index);
+        }
         UpdateState();
     }
 
     private void UpdateState()
     {
-        SelectedSession = Sessions.FirstOrDefault(item => item.SessionId == _application?.SelectedSessionId);
+        foreach (SessionItemViewModel item in _items.Values)
+        {
+            item.IsCurrent = item.SessionId == _application?.SelectedSessionId;
+        }
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(CanChangeSession));
+        OnPropertyChanged(nameof(SelectedSession));
         _createNewSessionCommand.RaiseCanExecuteChanged();
         _openSessionCommand.RaiseCanExecuteChanged();
         _deleteSessionCommand.RaiseCanExecuteChanged();
+        _saveTitleCommand.RaiseCanExecuteChanged();
+        (EditTitleCommand as SimpleCommand<SessionItemViewModel>)?.RaiseCanExecuteChanged();
+        (ReloadCommand as SimpleAsyncCommand)?.RaiseCanExecuteChanged();
     }
 }
 
 /// <summary>
-/// 表示历史会话的只读摘要。
+/// 表示历史会话摘要及标题编辑状态。
 /// </summary>
 public sealed class SessionItemViewModel : ViewModelBase
 {
+    private string _editedTitle;
+    private bool _isEditing;
+    private bool _isCurrent;
+
+    /// <summary>
+    /// 获取此条目是否为当前聊天会话，与列表焦点或选中状态无关。
+    /// </summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        internal set => SetField(ref _isCurrent, value);
+    }
+
     internal SessionItemViewModel(CopilotChatSessionSummary summary)
     {
         SessionId = summary.SessionId;
         Title = summary.Title;
+        _editedTitle = Title;
+        WorkspacePath = summary.WorkspacePath;
         StartedTime = summary.StartedTime;
         MessageCount = summary.MessageCount;
     }
 
     public Guid SessionId { get; }
-
-    /// <summary>
-    /// 获取会话标题。
-    /// </summary>
-    public string Title { get; }
-
+    public string Title { get; private set; }
+    public string? WorkspacePath { get; private set; }
     public DateTimeOffset StartedTime { get; }
+    public int MessageCount { get; private set; }
 
-    public int MessageCount { get; }
-
-    /// <summary>
-    /// 获取消息数与活动时间摘要。
-    /// </summary>
-    public string Subtitle => string.Create(
-        CultureInfo.CurrentCulture,
-        $"{MessageCount} 条消息 · {StartedTime:MM-dd HH:mm}");
+    internal void Update(CopilotChatSessionSummary summary)
+    {
+        if (Title != summary.Title)
+        {
+            Title = summary.Title;
+            OnPropertyChanged(nameof(Title));
+            if (!IsEditing) EditedTitle = Title;
+        }
+        if (WorkspacePath != summary.WorkspacePath)
+        {
+            WorkspacePath = summary.WorkspacePath;
+            OnPropertyChanged(nameof(WorkspacePath));
+        }
+        if (MessageCount != summary.MessageCount)
+        {
+            MessageCount = summary.MessageCount;
+            OnPropertyChanged(nameof(MessageCount));
+            OnPropertyChanged(nameof(Subtitle));
+        }
+    }
+    public string EditedTitle { get => _editedTitle; set => SetField(ref _editedTitle, value); }
+    public bool IsEditing { get => _isEditing; set => SetField(ref _isEditing, value); }
+    public string Subtitle => string.Create(CultureInfo.CurrentCulture, $"{MessageCount} 条消息 · {StartedTime:MM-dd HH:mm}");
 }

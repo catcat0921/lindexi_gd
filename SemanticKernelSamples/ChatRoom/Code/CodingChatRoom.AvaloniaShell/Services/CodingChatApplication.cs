@@ -70,10 +70,14 @@ internal sealed class CodingChatApplication
 
     public bool IsRunActive => _isRunActive;
 
+    private readonly HashSet<Guid> _deletedSessionIds = [];
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<CopilotChatSessionSummary> summaries = await LoadSessionSummariesAsync(cancellationToken);
-        AddSessionSummaries(summaries);
+        await foreach (CopilotChatSessionSummary summary in _sessionStore.EnumerateSessionsAsync(cancellationToken))
+        {
+            AddSessionSummaries([summary]);
+        }
     }
 
     internal Task<IReadOnlyList<CopilotChatSessionSummary>> LoadSessionSummariesAsync
@@ -87,7 +91,33 @@ internal sealed class CodingChatApplication
         ArgumentNullException.ThrowIfNull(summaries);
         foreach (CopilotChatSessionSummary summary in summaries)
         {
-            Sessions.Add(summary);
+            if (!_deletedSessionIds.Contains(summary.SessionId)
+                && Sessions.All(item => item.SessionId != summary.SessionId)
+                && _chatManager.ChatSessions.All(session => session.SessionId != summary.SessionId))
+            {
+                Sessions.Add(summary);
+            }
+        }
+
+    }
+
+    public async Task RenameSessionAsync(Guid sessionId, string title, CancellationToken cancellationToken = default)
+    {
+        EnsureCanChangeSession();
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        CopilotChatSession session = _chatManager.ChatSessions.FirstOrDefault(item => item.SessionId == sessionId)
+            ?? await _sessionStore.LoadSessionAsync(sessionId, cancellationToken);
+        string previousTitle = session.Title;
+        try
+        {
+            session.SetTitle(title.Trim());
+            await _sessionStore.SaveSessionAsync(session, cancellationToken);
+            AddOrUpdateSummary(session, insertAtTop: false);
+        }
+        catch
+        {
+            session.SetTitle(previousTitle);
+            throw;
         }
     }
 
@@ -143,6 +173,7 @@ internal sealed class CodingChatApplication
         EnsureCanChangeSession();
         CopilotChatSession? session = _chatManager.ChatSessions.FirstOrDefault(item => item.SessionId == sessionId);
         await _sessionStore.DeleteSessionAsync(sessionId, cancellationToken);
+        _deletedSessionIds.Add(sessionId);
 
         if (session is not null)
         {
@@ -209,6 +240,7 @@ internal sealed class CodingChatApplication
         _isRunActive = true;
         OnStateChanged();
         CopilotChatSession session = _chatManager.SelectedSession;
+        session.WorkspacePath = _workspaceController.NextRunWorkspacePath;
         Exception? runException = null;
         try
         {
@@ -343,6 +375,7 @@ internal sealed class CodingChatApplication
         {
             SessionId = session.SessionId,
             Title = session.Title,
+            WorkspacePath = session.WorkspacePath,
             StartedTime = session.StartedTime,
             MessageCount = session.ChatMessages.Count(message => !message.IsPresetInfo),
         };

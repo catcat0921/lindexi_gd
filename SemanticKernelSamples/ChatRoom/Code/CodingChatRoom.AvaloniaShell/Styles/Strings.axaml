@@ -4,8 +4,20 @@
     <Styles.Resources>
         <sys:String x:Key="ApplicationTitle">CodingChatRoom 编程助手</sys:String>
         <sys:String x:Key="SessionListTitle">历史会话</sys:String>
+        <sys:String x:Key="CurrentSessionText">当前会话</sys:String>
         <sys:String x:Key="NewSessionText">+ 新建</sys:String>
-        <sys:String x:Key="EmptySessionListText">暂无历史会话</sys:String>
+        <sys:String x:Key="EmptySessionListText">暂无匹配的历史会话</sys:String>
+        <sys:String x:Key="HistorySearchText">搜索标题或工作路径</sys:String>
+        <sys:String x:Key="HistoryLoadingText">正在加载历史会话…</sys:String>
+        <sys:String x:Key="BackToChatText">返回聊天</sys:String>
+        <sys:String x:Key="EditSessionTitleText">编辑标题</sys:String>
+        <sys:String x:Key="OpenSessionText">切换到会话</sys:String>
+        <sys:String x:Key="DeleteSessionText">删除</sys:String>
+        <sys:String x:Key="SaveTitleText">保存</sys:String>
+        <sys:String x:Key="CancelEditText">取消</sys:String>
+        <sys:String x:Key="RefreshHistoryText">刷新</sys:String>
+        <sys:String x:Key="SettingsNavigationText">设置</sys:String>
+        <sys:String x:Key="SessionWorkspaceText">工作路径：</sys:String>
         <sys:String x:Key="ChatTitle">编程助手</sys:String>
         <sys:String x:Key="ChatDescription">会话、工作区和模型发送能力将在后续阶段接入。</sys:String>
         <sys:String x:Key="MessageInputPlaceholder">输入编程问题（Ctrl+Enter 发送）</sys:String>

@@ -21,15 +21,15 @@ public class CopilotChatSessionTests
     }
 
     [TestMethod]
-    [Description("添加超长用户消息后应将标题截断为二十个字符并追加省略号")]
-    public async Task AddMessage_WhenUserMessageIsTooLong_TruncatesTitle()
+    [Description("长标题应保留完整内容，由界面按宽度显示")]
+    public async Task AddMessage_WhenUserMessageIsTooLong_PreservesTitle()
     {
         var session = new CopilotChatSession(Guid.NewGuid(), DateTimeOffset.Now);
         var message = new CopilotChatMessage(ChatRole.User, "1234567890123456789012345");
 
         await session.AddMessageAsync(message);
 
-        Assert.AreEqual("12345678901234567890...", session.Title);
+        Assert.AreEqual("1234567890123456789012345", session.Title);
     }
 
     [TestMethod]

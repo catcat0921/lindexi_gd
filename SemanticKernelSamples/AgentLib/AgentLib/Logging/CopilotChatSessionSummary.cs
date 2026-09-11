@@ -18,6 +18,11 @@ public sealed record CopilotChatSessionSummary
     public required string Title { get; init; }
 
     /// <summary>
+    /// 获取会话工作路径；未设置时为空。
+    /// </summary>
+    public string? WorkspacePath { get; init; }
+
+    /// <summary>
     /// 获取会话开始时间。
     /// </summary>
     public required DateTimeOffset StartedTime { get; init; }

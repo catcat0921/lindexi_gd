@@ -5,36 +5,26 @@
              x:Class="CodingChatRoom.AvaloniaShell.Views.MainView"
              x:DataType="vm:MainViewModel">
     <Grid>
-        <Grid ColumnDefinitions="260,4,*" IsVisible="{Binding IsChatOpen}">
-            <Border Grid.Column="0"
-                    Background="{StaticResource SurfaceBrush}"
-                    BorderBrush="{StaticResource BorderBrush}"
-                    BorderThickness="0,0,1,0">
-                <Grid RowDefinitions="*,Auto">
-                    <views:SessionListView DataContext="{Binding SessionListViewModel}" />
-                    <Border Grid.Row="1"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="0,1,0,0"
-                            Padding="10">
-                        <Button Name="SettingsButton"
-                                Classes="Flat"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Left"
-                                Content="⚙  设置"
-                                Command="{Binding OpenSettingsCommand}" />
-                    </Border>
+        <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsChatOpen}">
+            <Border Padding="12,8" Background="{StaticResource SurfaceBrush}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Name="NewSessionButton" Classes="Primary" Content="{StaticResource NewSessionText}"
+                                Command="{Binding SessionListViewModel.CreateNewSessionCommand}" />
+                        <Button Name="HistoryButton" Content="{StaticResource SessionListTitle}"
+                                Command="{Binding OpenHistoryCommand}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Name="SettingsButton" Classes="Flat"
+                            Content="{StaticResource SettingsNavigationText}" Command="{Binding OpenSettingsCommand}" />
                 </Grid>
             </Border>
-
-            <GridSplitter Grid.Column="1"
-                          Width="4"
-                          Background="{StaticResource BorderBrush}"
-                          ResizeDirection="Columns" />
-
-            <views:ChatView Grid.Column="2"
-                            DataContext="{Binding ChatViewModel}" />
+            <views:ChatView Grid.Row="1" DataContext="{Binding ChatViewModel}" />
         </Grid>
-
+        <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsHistoryOpen}">
+            <Button Margin="16,12" HorizontalAlignment="Left" Content="{StaticResource BackToChatText}"
+                    Command="{Binding CloseHistoryCommand}" />
+            <views:SessionListView Grid.Row="1" DataContext="{Binding SessionListViewModel}" />
+        </Grid>
         <Panel IsVisible="{Binding IsSettingsOpen}">
             <views:SettingsView DataContext="{Binding SettingsViewModel}" />
         </Panel>

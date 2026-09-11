@@ -78,6 +78,7 @@ internal static class CopilotChatHistoryXmlCodec
             SessionId = sessionId,
             StartedTime = startedTime,
             Title = rootElement.Attribute("Title")?.Value ?? string.Empty,
+            WorkspacePath = rootElement.Attribute("WorkspacePath")?.Value,
             Messages = messages,
             AgentSessionState = agentSessionState,
         };
