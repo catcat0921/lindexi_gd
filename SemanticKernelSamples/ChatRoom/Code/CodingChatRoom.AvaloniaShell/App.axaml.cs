@@ -47,8 +47,7 @@ public partial class App : Application
                     _runtime.WorkspaceController,
                     $"当前模型：{_runtime.ModelDisplayName}"),
                 _runtime.SettingsService);
-            var mainWindow = new MainWindow(
-                new CodingChatHistoryLoader(_runtime.Application))
+            var mainWindow = new MainWindow()
             {
                 DataContext = mainViewModel,
             };

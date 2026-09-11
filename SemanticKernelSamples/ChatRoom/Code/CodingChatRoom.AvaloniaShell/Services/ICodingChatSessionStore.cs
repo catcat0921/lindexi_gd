@@ -18,6 +18,16 @@ internal interface ICodingChatSessionStore
 {
     Task<IReadOnlyList<CopilotChatSessionSummary>> ListSessionsAsync(CancellationToken cancellationToken = default);
 
+    async IAsyncEnumerable<CopilotChatSessionSummary> EnumerateSessionsAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var summary in await ListSessionsAsync(cancellationToken).ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return summary;
+        }
+    }
+
     Task<CopilotChatSession> LoadSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
@@ -47,6 +57,9 @@ internal sealed class FileCodingChatSessionStore : ICodingChatSessionStore
     public Task<IReadOnlyList<CopilotChatSessionSummary>> ListSessionsAsync(CancellationToken cancellationToken = default)
         => _store.ListSessionsAsync(cancellationToken);
 
+    public IAsyncEnumerable<CopilotChatSessionSummary> EnumerateSessionsAsync(CancellationToken cancellationToken = default)
+        => _store.EnumerateSessionsAsync(cancellationToken);
+
     public async Task<CopilotChatSession> LoadSessionAsync(
         Guid sessionId,
         CancellationToken cancellationToken = default)
@@ -57,6 +70,7 @@ internal sealed class FileCodingChatSessionStore : ICodingChatSessionStore
         var session = new CopilotChatSession(persistenceData.SessionId, persistenceData.StartedTime)
         {
             MainThreadDispatcher = _mainThreadDispatcher,
+            WorkspacePath = persistenceData.WorkspacePath,
         };
         if (!string.IsNullOrWhiteSpace(persistenceData.Title))
         {

@@ -1,7 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-
-using CodingChatRoom.AvaloniaShell.ViewModels;
 
 namespace CodingChatRoom.AvaloniaShell.Views;
 
@@ -16,18 +13,5 @@ public partial class SessionListView : UserControl
     public SessionListView()
     {
         InitializeComponent();
-    }
-
-    private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (DataContext is not SessionListViewModel viewModel || sender is not ListBox { SelectedItem: SessionItemViewModel session })
-        {
-            return;
-        }
-
-        if (viewModel.OpenSessionCommand.CanExecute(session))
-        {
-            viewModel.OpenSessionCommand.Execute(session);
-        }
     }
 }

@@ -13,6 +13,40 @@ public sealed class MainViewModel : ViewModelBase
 {
     private readonly SettingsViewModel? _settingsViewModel;
     private bool _isSettingsOpen;
+    private bool _isHistoryOpen;
+
+    /// <summary>
+    /// 获取当前是否显示历史会话页面。
+    /// </summary>
+    public bool IsHistoryOpen
+    {
+        get => _isHistoryOpen;
+        private set
+        {
+            if (SetField(ref _isHistoryOpen, value)) OnPropertyChanged(nameof(IsChatOpen));
+        }
+    }
+
+    /// <summary>
+    /// 获取历史页面导航命令。
+    /// </summary>
+    public ICommand OpenHistoryCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// 获取返回聊天命令。
+    /// </summary>
+    public ICommand CloseHistoryCommand { get; private set; } = null!;
+
+    private void InitializeHistoryNavigation()
+    {
+        OpenHistoryCommand = new SimpleAsyncCommand(async () =>
+        {
+            IsHistoryOpen = true;
+            await SessionListViewModel.LoadAsync();
+        }, allowConcurrentExecutions: true);
+        CloseHistoryCommand = new SimpleCommand(() => IsHistoryOpen = false);
+        SessionListViewModel.SessionOpened += (_, _) => IsHistoryOpen = false;
+    }
 
     /// <summary>
     /// 初始化 Shell 视图模型。
@@ -33,6 +67,7 @@ public sealed class MainViewModel : ViewModelBase
         SessionListViewModel = sessionListViewModel;
         ChatViewModel = chatViewModel;
         OpenSettingsCommand = new SimpleAsyncCommand(static () => Task.CompletedTask, static () => false);
+        InitializeHistoryNavigation();
     }
 
     internal MainViewModel(
@@ -48,6 +83,7 @@ public sealed class MainViewModel : ViewModelBase
         ChatViewModel = chatViewModel;
         _settingsViewModel = new SettingsViewModel(settingsService, CloseSettings);
         OpenSettingsCommand = new SimpleAsyncCommand(OpenSettingsAsync, () => !IsSettingsOpen);
+        InitializeHistoryNavigation();
     }
 
     /// <summary>
@@ -87,7 +123,7 @@ public sealed class MainViewModel : ViewModelBase
     /// <summary>
     /// 获取当前是否显示聊天页面。
     /// </summary>
-    public bool IsChatOpen => !IsSettingsOpen;
+    public bool IsChatOpen => !IsSettingsOpen && !IsHistoryOpen;
 
     /// <summary>
     /// 获取打开设置页面的命令。

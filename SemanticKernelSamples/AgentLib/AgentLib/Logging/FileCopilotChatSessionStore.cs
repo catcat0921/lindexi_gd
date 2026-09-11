@@ -63,6 +63,7 @@ public sealed class FileCopilotChatSessionStore
                 CurrentFormatVersion,
                 session.ChatMessages,
                 agentSessionState));
+            document.Root!.SetAttributeValue("WorkspacePath", session.WorkspacePath);
             await SaveDocumentAsync(filePath, document, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -76,33 +77,47 @@ public sealed class FileCopilotChatSessionStore
     /// </summary>
     public async Task<IReadOnlyList<CopilotChatSessionSummary>> ListSessionsAsync(CancellationToken cancellationToken = default)
     {
-        if (!Directory.Exists(_sessionDirectory))
+        var summaries = new List<CopilotChatSessionSummary>();
+        await foreach (var summary in EnumerateSessionsAsync(cancellationToken).ConfigureAwait(false))
         {
-            return [];
+            summaries.Add(summary);
         }
+        return summaries.OrderByDescending(summary => summary.StartedTime).ToArray();
+    }
 
-        string[] files = Directory.GetFiles(_sessionDirectory, "*.xml", SearchOption.TopDirectoryOnly);
-        var summaries = new List<CopilotChatSessionSummary>(files.Length);
+    /// <summary>
+    /// 逐个读取并返回会话摘要，不等待其余文件加载完成。
+    /// </summary>
+    public async IAsyncEnumerable<CopilotChatSessionSummary> EnumerateSessionsAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        string[] files = await Task.Run(() => Directory.Exists(_sessionDirectory)
+            ? Directory.GetFiles(_sessionDirectory, "*.xml", SearchOption.TopDirectoryOnly)
+            : Array.Empty<string>(), cancellationToken).ConfigureAwait(false);
         foreach (string file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            CopilotChatSessionSummary summary;
             try
             {
-                CopilotChatSessionPersistenceData persistenceData = await LoadFileAsync(file, cancellationToken).ConfigureAwait(false);
-                summaries.Add(new CopilotChatSessionSummary
+                CopilotChatSessionPersistenceData persistenceData = await Task.Run(
+                    () => LoadFileAsync(file, cancellationToken), cancellationToken).ConfigureAwait(false);
+                summary = new CopilotChatSessionSummary
                 {
                     SessionId = persistenceData.SessionId,
                     Title = persistenceData.Title,
+                    WorkspacePath = persistenceData.WorkspacePath,
                     StartedTime = persistenceData.StartedTime,
                     MessageCount = persistenceData.Messages.Count,
-                });
+                };
             }
-            catch (Exception exception) when (exception is InvalidDataException or XmlException or JsonException or FormatException)
+            catch (Exception exception) when (exception is InvalidDataException or XmlException or JsonException or FormatException or FileNotFoundException or DirectoryNotFoundException)
             {
+                System.Diagnostics.Trace.TraceWarning($"{file}: {exception.Message}");
+                continue;
             }
+            yield return summary;
         }
-
-        return summaries.OrderByDescending(summary => summary.StartedTime).ToArray();
     }
 
     /// <summary>

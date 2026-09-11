@@ -11,6 +11,34 @@ namespace AgentLib.Tests.Logging;
 [TestClass]
 public sealed class FileCopilotChatSessionStoreTests
 {
+    [DataTestMethod]
+    [DataRow(null)]
+    [DataRow("/projects/sample")]
+    public async Task SaveAndLoadShouldPreserveOptionalWorkspace(string? workspacePath)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Console.WriteLine(directory);
+        var store = new FileCopilotChatSessionStore(directory);
+        var session = new CopilotChatSession { WorkspacePath = workspacePath };
+        await store.SaveSessionAsync(session, null);
+        CopilotChatSessionPersistenceData data = await store.LoadSessionAsync(session.SessionId);
+        Assert.AreEqual(workspacePath, data.WorkspacePath);
+    }
+
+    [DataTestMethod]
+    [DataRow(null)]
+    [DataRow("/projects/sample")]
+    public async Task ListShouldIncludeOptionalWorkspace(string? workspacePath)
+    {
+        string directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Console.WriteLine(directory);
+        var store = new FileCopilotChatSessionStore(directory);
+        var session = new CopilotChatSession { WorkspacePath = workspacePath };
+        await store.SaveSessionAsync(session, null);
+        var summaries = await store.ListSessionsAsync();
+        Assert.AreEqual(workspacePath, summaries.Single().WorkspacePath);
+    }
+
     [TestMethod(DisplayName = "版本二会话数据往返应保留元数据消息片段用量和代理状态")]
     [Timeout(10000, CooperativeCancellation = true)]
     public async Task SaveAndLoadShouldPreserveCompleteSessionSnapshot()

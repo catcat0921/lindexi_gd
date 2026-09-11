@@ -232,6 +232,62 @@ public sealed class CodingChatApplicationTests
         Assert.AreEqual(expectedCompressionCount, compressionCount);
     }
 
+    [TestMethod]
+    public void HistoryShouldNotLoadWhenViewModelIsCreated()
+    {
+        var store = new TestSessionStore();
+        var application = CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), store);
+        _ = new SessionListViewModel(application);
+        Assert.AreEqual(0, store.ListCount);
+    }
+
+    [TestMethod]
+    public async Task RepeatedHistoryLoadsShouldNotDuplicateSessions()
+    {
+        var session = new CopilotChatSession();
+        var application = CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), new TestSessionStore(session));
+        var viewModel = new SessionListViewModel(application);
+        await viewModel.LoadAsync();
+        await viewModel.LoadAsync();
+        Assert.HasCount(2, viewModel.Sessions);
+    }
+
+    [DataTestMethod]
+    [DataRow("CUSTOM TITLE")]
+    [DataRow("projects/sample")]
+    public async Task HistorySearchShouldMatchTitleOrWorkspace(string query)
+    {
+        var session = new CopilotChatSession { WorkspacePath = "/projects/sample" };
+        session.SetTitle("Custom title");
+        var application = CodingChatApplicationTestFactory.CreateApplication(new CopilotChatManager(), new TestSessionStore(session));
+        var viewModel = new SessionListViewModel(application);
+        await viewModel.LoadAsync();
+        viewModel.SearchText = query;
+        Assert.AreEqual(session.SessionId, viewModel.Sessions.Single().SessionId);
+    }
+
+    [TestMethod]
+    public async Task RenameShouldPersistTitleWithoutSwitchingSession()
+    {
+        var session = new CopilotChatSession();
+        var manager = new CopilotChatManager();
+        var store = new TestSessionStore(session);
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, store);
+        await application.RenameSessionAsync(session.SessionId, "Updated title");
+        Assert.AreEqual("Updated title", store.LastSavedSession?.Title);
+    }
+
+    [TestMethod]
+    public async Task RenameShouldKeepCurrentSelection()
+    {
+        var session = new CopilotChatSession();
+        var manager = new CopilotChatManager();
+        Guid selectedId = manager.SelectedSession.SessionId;
+        var application = CodingChatApplicationTestFactory.CreateApplication(manager, new TestSessionStore(session));
+        await application.RenameSessionAsync(session.SessionId, "Updated title");
+        Assert.AreEqual(selectedId, application.SelectedSessionId);
+    }
+
     private static CopilotChatSession CreateSession(string title, string content, DateTimeOffset startedTime)
     {
         var session = new CopilotChatSession(Guid.NewGuid(), startedTime);
@@ -273,13 +329,17 @@ public sealed class CodingChatApplicationTests
 
         public CopilotChatSession? LastSavedSession { get; private set; }
 
+        public int ListCount { get; private set; }
+
         public Task<IReadOnlyList<CopilotChatSessionSummary>> ListSessionsAsync(CancellationToken cancellationToken = default)
         {
+            ListCount++;
             IReadOnlyList<CopilotChatSessionSummary> summaries = _sessions.Values
                 .Select(session => new CopilotChatSessionSummary
                 {
                     SessionId = session.SessionId,
                     Title = session.Title,
+                    WorkspacePath = session.WorkspacePath,
                     StartedTime = session.StartedTime,
                     MessageCount = session.ChatMessages.Count,
                 })
