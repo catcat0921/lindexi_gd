@@ -1,15 +1,15 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Style Selector="Border.MessageBubbleAssistant">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="CornerRadius" Value="12,12,12,4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="CornerRadius" Value="0" />
         <Setter Property="Padding" Value="12,8" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="Border.MessageBubbleUser">
         <Setter Property="Background" Value="{StaticResource PrimaryLightBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="#E1E9F9" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="12,12,4,12" />
         <Setter Property="Padding" Value="12,8" />
@@ -26,13 +26,14 @@
         <Setter Property="FocusAdorner" Value="{x:Null}" />
         <Setter Property="IsReadOnly" Value="True" />
         <Setter Property="MinHeight" Value="0" />
-        <Setter Property="Padding" Value="0" />
+        <Setter Property="Padding" Value="2" />
         <Setter Property="SelectionBrush" Value="{StaticResource PrimaryLightBrush}" />
         <Setter Property="SelectionForegroundBrush" Value="{StaticResource TextPrimaryBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="VerticalContentAlignment" Value="Top" />
     </Style>
-    <Style Selector="TextBox.ChatOutput:focus">
+    <Style Selector="TextBox.ChatOutput:focus, TextBox.ChatOutput:focus-visible, TextBox.ChatOutput:focus-within">
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />

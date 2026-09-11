@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\Icons\CodingChatRoom.ico" />
+    <AvaloniaResource Include="Assets\Icons\CodingChatRoom_48x48.png" />
     <AvaloniaResource Include="Styles\Strings.axaml" />
     <AvaloniaResource Include="Styles\Colors.axaml" />
     <AvaloniaResource Include="Styles\Controls.axaml" />

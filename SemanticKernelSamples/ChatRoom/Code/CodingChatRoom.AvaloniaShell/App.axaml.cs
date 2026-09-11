@@ -47,6 +47,7 @@ public partial class App : Application
                     _runtime.WorkspaceController,
                     $"当前模型：{_runtime.ModelDisplayName}"),
                 _runtime.SettingsService);
+            mainViewModel.ConfigureTaskFactory(() => CodingChatStartup.InitializeAsync(paths, new AvaloniaMainThreadDispatcher()));
             var mainWindow = new MainWindow()
             {
                 DataContext = mainViewModel,

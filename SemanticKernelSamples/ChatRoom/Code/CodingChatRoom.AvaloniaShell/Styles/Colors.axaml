@@ -1,19 +1,19 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <Color x:Key="PrimaryColor">#2196F3</Color>
-        <Color x:Key="PrimaryLightColor">#BBDEFB</Color>
+        <Color x:Key="PrimaryColor">#5278D5</Color>
+        <Color x:Key="PrimaryLightColor">#EAF0FC</Color>
         <Color x:Key="PrimaryDarkColor">#1976D2</Color>
-        <Color x:Key="BackgroundColor">#F5F5F5</Color>
+        <Color x:Key="BackgroundColor">#FAFBFE</Color>
         <Color x:Key="SurfaceColor">#FFFFFF</Color>
-        <Color x:Key="SurfaceVariantColor">#EEEEEE</Color>
+        <Color x:Key="SurfaceVariantColor">#F0F4FA</Color>
         <Color x:Key="SuccessColor">#4CAF50</Color>
         <Color x:Key="WarningColor">#FF9800</Color>
         <Color x:Key="ErrorColor">#F44336</Color>
-        <Color x:Key="TextPrimaryColor">#212121</Color>
-        <Color x:Key="TextSecondaryColor">#757575</Color>
+        <Color x:Key="TextPrimaryColor">#2C3B53</Color>
+        <Color x:Key="TextSecondaryColor">#62738D</Color>
         <Color x:Key="TextOnPrimaryColor">#FFFFFF</Color>
-        <Color x:Key="BorderColor">#E0E0E0</Color>
+        <Color x:Key="BorderColor">#E3E9F3</Color>
         <Color x:Key="DividerColor">#BDBDBD</Color>
         <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
         <SolidColorBrush x:Key="PrimaryLightBrush" Color="{StaticResource PrimaryLightColor}" />

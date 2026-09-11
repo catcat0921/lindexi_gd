@@ -2,10 +2,27 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <Styles.Resources>
+        <sys:String x:Key="WorkspacePlaceholderText">输入工作目录路径</sys:String>
+        <sys:String x:Key="WelcomeTitleText">今天，从哪个任务开始？</sys:String>
+        <sys:String x:Key="WelcomeDescriptionText">选择工作目录与模型，描述目标，让编程助手与你一起完成。</sys:String>
+        <sys:String x:Key="WelcomeExamplesText">理解项目结构　·　排查代码问题　·　实现新的功能</sys:String>
+        <sys:String x:Key="WorkTaskText">工作任务</sys:String>
+        <sys:String x:Key="WorkTasksText">我的工作任务</sys:String>
+        <sys:String x:Key="NewWorkTaskText">新建工作任务</sys:String>
+        <sys:String x:Key="ProductSubtitleText">专注每一个编程任务</sys:String>
+        <sys:String x:Key="AllSessionsText">全部历史会话</sys:String>
+        <sys:String x:Key="IdleText">空闲</sys:String>
+        <sys:String x:Key="WorkingText">工作中</sys:String>
+        <sys:String x:Key="MoreActionsText">更多任务操作</sys:String>
+        <sys:String x:Key="RenameWorkTaskText">重命名任务</sys:String>
+        <sys:String x:Key="WorkDirectoryText">工作目录</sys:String>
+        <sys:String x:Key="ModelText">模型</sys:String>
+        <sys:String x:Key="ReasoningEffortText">思考强度</sys:String>
+        <sys:String x:Key="InputShortcutText">Ctrl + Enter 发送 · Shift + Enter 换行</sys:String>
         <sys:String x:Key="ApplicationTitle">CodingChatRoom 编程助手</sys:String>
         <sys:String x:Key="SessionListTitle">历史会话</sys:String>
         <sys:String x:Key="CurrentSessionText">当前会话</sys:String>
-        <sys:String x:Key="NewSessionText">+ 新建</sys:String>
+        <sys:String x:Key="NewSessionText">+ 新建会话</sys:String>
         <sys:String x:Key="EmptySessionListText">暂无匹配的历史会话</sys:String>
         <sys:String x:Key="HistorySearchText">搜索标题或工作路径</sys:String>
         <sys:String x:Key="HistoryLoadingText">正在加载历史会话…</sys:String>
@@ -20,7 +37,7 @@
         <sys:String x:Key="SessionWorkspaceText">工作路径：</sys:String>
         <sys:String x:Key="ChatTitle">编程助手</sys:String>
         <sys:String x:Key="ChatDescription">会话、工作区和模型发送能力将在后续阶段接入。</sys:String>
-        <sys:String x:Key="MessageInputPlaceholder">输入编程问题（Ctrl+Enter 发送）</sys:String>
+        <sys:String x:Key="MessageInputPlaceholder">描述你想完成的任务，或继续追问…</sys:String>
         <sys:String x:Key="AddImageText">添加图片</sys:String>
         <sys:String x:Key="RemoveImageText">移除图片</sys:String>
         <sys:String x:Key="OpenImageExternallyText">点击使用系统图片查看器打开</sys:String>
