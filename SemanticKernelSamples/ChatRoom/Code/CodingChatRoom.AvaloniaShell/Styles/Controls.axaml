@@ -1,53 +1,107 @@
-<Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Style Selector="Button.Primary">
-        <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextOnPrimaryBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="16,8" />
-        <Setter Property="CornerRadius" Value="6" />
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <FontFamily x:Key="ShellFont">Microsoft YaHei UI, Microsoft YaHei, Segoe UI, PingFang SC, Noto Sans CJK SC</FontFamily>
+    </Styles.Resources>
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{StaticResource ShellFont}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
-    <Style Selector="Button.Primary:pointerover">
-        <Setter Property="Background" Value="{StaticResource PrimaryDarkBrush}" />
-    </Style>
-    <Style Selector="Button.Flat">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
+    <Style Selector="Button">
+        <Setter Property="FontFamily" Value="{StaticResource ShellFont}" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Padding" Value="12,6" />
-        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.Flat:pointerover">
-        <Setter Property="Background" Value="{StaticResource SurfaceVariantBrush}" />
+    <Style Selector="Button.Primary">
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="Button.Danger">
-        <Setter Property="Background" Value="{StaticResource ErrorBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextOnPrimaryBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="16,8" />
-        <Setter Property="CornerRadius" Value="6" />
+    <Style Selector="Button.Flat, Button.Icon, Button.Navigation, Button.TaskSelect">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
-    <Style Selector="TextBox.Rounded">
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="Padding" Value="8,6" />
+    <Style Selector="Button.Icon">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="7" />
     </Style>
-    <Style Selector="ListBoxItem.Card">
+    <Style Selector="Button.Navigation">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="Padding" Value="12,10" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Margin" Value="4,2" />
     </Style>
-    <Style Selector="Border.Card">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="CornerRadius" Value="8" />
+    <Style Selector="Button.TaskSelect">
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.Navigation.Active">
+        <Setter Property="Background" Value="#E8E8E8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.TaskSelect.Active">
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.Danger, Button.QuietDanger, Button.IconDanger">
+        <Setter Property="Foreground" Value="#C42B1C" />
+    </Style>
+    <Style Selector="Border.TaskTile">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.TaskTile.Active">
+        <Setter Property="Background" Value="#E8E8E8" />
+    </Style>
+    <Style Selector="TextBox.Rounded, ComboBox">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="32" />
+    </Style>
+    <Style Selector="TextBox.ComposerInput">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="MinHeight" Value="56" />
+        <Setter Property="MaxHeight" Value="160" />
+        <Setter Property="AcceptsReturn" Value="True" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+    <Style Selector="TextBox.ComposerInput /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Border.ComposerSurface:focus-within">
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemControlHighlightAccentBrush}" />
+    </Style>
+    <Style Selector="CheckBox">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="32" />
     </Style>
     <Style Selector="TextBlock.Title">
-        <Setter Property="FontSize" Value="16" />
-        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
     <Style Selector="TextBlock.Subtitle">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.Timestamp">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="ListBoxItem.Card">
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="Margin" Value="4,2" />
+        <Setter Property="CornerRadius" Value="4" />
     </Style>
 </Styles>

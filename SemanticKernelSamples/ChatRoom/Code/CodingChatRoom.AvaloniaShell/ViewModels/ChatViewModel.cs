@@ -99,8 +99,11 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// 获取当前会话标题。
+    /// 获取是否仅有预设欢迎信息，尚无实际对话。
     /// </summary>
+    public bool ShowWelcome => Messages.All(item => item.Message.IsPresetInfo);
+
+    /// <summary>获取当前会话标题。</summary>
     public string CurrentSessionTitle => _subscribedSession?.Title ?? "编程助手";
 
     /// <summary>
@@ -683,6 +686,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
             Messages.Add(new MessageItemViewModel(message));
         }
 
+        OnPropertyChanged(nameof(ShowWelcome));
         OnPropertyChanged(nameof(CurrentSessionId));
         OnPropertyChanged(nameof(CurrentSessionTitle));
     }
@@ -717,10 +721,12 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
                 Messages.Insert(insertionIndex++, new MessageItemViewModel(message));
             }
 
+            OnPropertyChanged(nameof(ShowWelcome));
             return;
         }
 
         RebuildMessages();
+        OnPropertyChanged(nameof(ShowWelcome));
     }
 
     private void RebuildMessages()

@@ -118,7 +118,7 @@
                     <StackPanel Orientation="Horizontal"
                                 Spacing="8"
                                 IsVisible="{Binding CanRespondToApproval}">
-                        <Button Classes="Primary"
+                        <Button Classes="Primary accent"
                                 Content="同意"
                                 Click="ApproveToolButton_OnClick"
                                 CommandParameter="{Binding}" />
@@ -166,15 +166,19 @@
                                                ImageItemTemplate="{StaticResource ImageItemTemplate}" />
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,*,Auto" Background="{StaticResource BackgroundBrush}">
         <Border Grid.Row="0"
-                Padding="12,8"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto"
-                  ColumnSpacing="8">
-                <Grid Grid.Column="0"
+                Margin="32,12,32,8" Padding="16,12"
+                CornerRadius="8" Background="#B3FFFFFF"
+                BorderBrush="#10000000" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto,32" RowDefinitions="Auto,Auto" RowSpacing="7"
+                  ColumnSpacing="16">
+                <TextBlock Text="{StaticResource WorkDirectoryText}" Classes="Subtitle" FontSize="11" />
+                <Grid Grid.Column="1" ColumnDefinitions="220,96" ColumnSpacing="8">
+                    <TextBlock Text="{StaticResource ModelText}" Classes="Subtitle" FontSize="11" />
+                    <TextBlock Grid.Column="1" Text="{StaticResource ReasoningEffortText}" Classes="Subtitle" FontSize="11" />
+                </Grid>
+                <Grid Grid.Row="1" Grid.Column="0"
                       ColumnDefinitions="*,Auto"
                       ColumnSpacing="8">
                     <TextBox Grid.Column="0"
@@ -182,18 +186,18 @@
                              Classes="Rounded"
                              ToolTip.Tip="{Binding WorkspaceStatusText}"
                              Text="{Binding WorkspaceInput, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="输入本地代码目录；留空后应用可清除工作区"
+                             PlaceholderText="{StaticResource WorkspacePlaceholderText}"
                              IsEnabled="{Binding !IsChangingWorkspace}" />
                     <Button Grid.Column="1"
                             MinWidth="72"
                             MinHeight="32"
-                            Classes="Primary"
+                            Classes="Primary accent"
                             Content="应用"
                             Command="{Binding ApplyWorkspaceCommand}"
                             IsEnabled="{Binding CanApplyWorkspace}" />
                 </Grid>
 
-                <StackPanel Grid.Column="1"
+                <StackPanel Grid.Row="1" Grid.Column="1"
                             Orientation="Horizontal"
                             Spacing="8">
                     <ComboBox x:Name="ModelSelector"
@@ -225,27 +229,40 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
+                <Button x:Name="TaskHistoryButton" Grid.Row="1" Grid.Column="2" Classes="Secondary" Width="32" Height="32" Padding="7" VerticalAlignment="Bottom"
+                        ToolTip.Tip="{StaticResource SessionListTitle}" AutomationProperties.Name="{StaticResource SessionListTitle}"
+                        Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).OpenTaskHistoryCommand}">
+                    <PathIcon Width="16" Height="16" Data="M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 M12,4 A8,8 0 1 1 12,20 A8,8 0 1 1 12,4 M11,6 L13,6 L13,12 L17,14 L16,16 L11,13 Z" />
+                </Button>
             </Grid>
         </Border>
 
-        <ScrollViewer x:Name="MessagesScrollViewer"
+        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32" IsVisible="{Binding ShowWelcome}">
+            <Border Width="52" Height="52" CornerRadius="16" Background="#E6EDFC" HorizontalAlignment="Center">
+                <PathIcon Width="26" Height="26" Foreground="#4969B8" Data="M4,4 L20,4 L20,18 L13,18 L8,22 L8,18 L4,18 Z M6,6 L6,16 L10,16 L10,18 L12,16 L18,16 L18,6 Z" />
+            </Border>
+            <TextBlock Text="{StaticResource WelcomeTitleText}" FontSize="24" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Text="{StaticResource WelcomeDescriptionText}" Classes="Subtitle" FontSize="14" HorizontalAlignment="Center" />
+            <TextBlock Text="{StaticResource WelcomeExamplesText}" Classes="Subtitle" HorizontalAlignment="Center" Margin="0,8,0,0" />
+        </StackPanel>
+        <ScrollViewer x:Name="MessagesScrollViewer" IsVisible="{Binding !ShowWelcome}"
                       Grid.Row="1"
                       Background="{StaticResource BackgroundBrush}"
-                      Padding="10 0 10 0"
+                      Padding="28,24"
                       VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="MessagesItemsControl" ItemsSource="{Binding Messages}">
+            <ItemsControl x:Name="MessagesItemsControl" MaxWidth="1000" HorizontalAlignment="Stretch" ItemsSource="{Binding Messages}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MessageItemViewModel">
-                        <Grid Margin="8,4">
-                            <StackPanel HorizontalAlignment="Left"
-                                        MaxWidth="720"
-                                        Spacing="2"
+                        <Grid Margin="0,0,0,24">
+                            <StackPanel HorizontalAlignment="Stretch"
+                                        Spacing="10"
                                         IsVisible="{Binding IsAssistantMessage}">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="{Binding Author}" Classes="AuthorName" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border Width="28" Height="28" CornerRadius="8" Background="#E6EDFC"><PathIcon Width="16" Height="16" Foreground="#4969B8" Data="M8,3 L8,1 L10,1 L10,3 L14,3 L14,1 L16,1 L16,3 L20,3 L20,7 L23,7 L23,9 L20,9 L20,15 L23,15 L23,17 L20,17 L20,21 L4,21 L4,17 L1,17 L1,15 L4,15 L4,9 L1,9 L1,7 L4,7 L4,3 Z M6,5 L6,19 L18,19 L18,5 Z M8,9 L10,9 L10,12 L8,12 Z M14,9 L16,9 L16,12 L14,12 Z M8,15 L16,15 L16,17 L8,17 Z" /></Border>
+                                    <TextBlock Text="{Binding Author}" Classes="AuthorName" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding TimeText}" Classes="Timestamp" />
                                 </StackPanel>
-                                <Border Classes="MessageBubbleAssistant" HorizontalAlignment="Left">
+                                <Border Classes="MessageBubbleAssistant" Margin="24,0,0,0" HorizontalAlignment="Stretch">
                                     <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="复制正文"
@@ -319,33 +336,14 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Border Grid.Row="2"
-                Padding="12,8"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,1,0,0">
-            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
-                <StackPanel Grid.Row="0"
-                            Grid.Column="0"
-                            Grid.ColumnSpan="7"
-                            Margin="0,0,0,8"
-                            HorizontalAlignment="Left"
-                            Orientation="Horizontal"
-                            Spacing="8">
-                    <Button x:Name="StopLanguageServerButton"
-                            Padding="12,6"
-                            Content="{StaticResource StopLanguageServerText}"
-                            Command="{Binding StopLanguageServerCommand}"
-                            ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
-                    <CheckBox x:Name="EnableDotNetRunCheckBox"
-                              VerticalAlignment="Center"
-                              Content="{StaticResource EnableDotNetRunText}"
-                              IsChecked="{Binding IsDotNetRunEnabled}"
-                              ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
-                </StackPanel>
-                <ItemsControl Grid.Row="1"
+        <Grid Grid.Row="2" Margin="32,8,32,18" RowDefinitions="Auto,Auto" RowSpacing="8">
+          <Border x:Name="ComposerPanel" Classes="ComposerSurface" Padding="16,14,16,10" CornerRadius="8"
+                Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1">
+            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto" RowSpacing="8">
+                <ItemsControl Grid.Row="0"
                               Grid.Column="0"
-                              Grid.ColumnSpan="7"
+                              Grid.ColumnSpan="3"
                               Margin="0,0,0,8"
                               ItemsSource="{Binding PendingImages}"
                               IsVisible="{Binding HasPendingImages}">
@@ -381,56 +379,35 @@
                 </ItemsControl>
                 <Button Grid.Row="2"
                         Grid.Column="0"
-                        Classes="Flat"
+                        Classes="Secondary"
                         Content="{StaticResource AddImageText}"
                         Click="AddImageButton_OnClick" />
-                <TextBox Grid.Row="2"
-                          Grid.Column="1"
-                          x:Name="MessageInputTextBox"
-                         Classes="Rounded"
-                         Margin="8,0,0,0"
-                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                         PlaceholderText="{StaticResource MessageInputPlaceholder}"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         MaxHeight="120" />
-                <CheckBox Grid.Row="2"
-                          Grid.Column="2"
-                          x:Name="LoopIterationCheckBox"
-                          Margin="8,0,0,0"
-                          VerticalAlignment="Center"
-                          Content="{StaticResource LoopIterationText}"
-                          IsChecked="{Binding IsLoopIterationEnabled}" />
-                <CheckBox Grid.Row="2"
-                          Grid.Column="3"
-                          x:Name="AutomaticCompressionCheckBox"
-                          Margin="8,0,0,0"
-                          VerticalAlignment="Center"
-                          Content="{StaticResource AutomaticCompressionText}"
-                          IsChecked="{Binding IsAutomaticCompressionEnabled}" />
-                <Button Grid.Row="2"
-                        Grid.Column="4"
-                        Classes="Primary"
-                        Content="{Binding SendButtonText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding SendCommand}"
-                        IsEnabled="{Binding CanSend}" />
-                <Button Grid.Row="2"
-                        Grid.Column="5"
-                        x:Name="CompressConversationButton"
-                        Classes="Flat"
-                        Content="{StaticResource CompressConversationText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding CompressConversationCommand}"
-                        IsEnabled="{Binding CanCompressConversation}" />
-                <Button Grid.Row="2"
-                        Grid.Column="6"
-                        Classes="Danger"
-                        Content="{StaticResource StopText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding StopCommand}"
-                        IsVisible="{Binding IsRunning}" />
+                <TextBox Grid.Row="1" Grid.ColumnSpan="3" x:Name="MessageInputTextBox"
+                         Classes="ComposerInput" Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{StaticResource MessageInputPlaceholder}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{StaticResource InputShortcutText}"
+                           Classes="Subtitle" Margin="12,0" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+                <Button Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Classes="Danger" Content="{StaticResource StopText}"
+                        Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}" />
+                <Button Grid.Row="2" Grid.Column="2" x:Name="SendButton" Classes="Primary accent" MinWidth="88"
+                        Command="{Binding SendCommand}" IsEnabled="{Binding CanSend}">
+                    <StackPanel Orientation="Horizontal" Spacing="8"><PathIcon Width="14" Height="14" Data="M2,3 L22,12 L2,21 L6,13 L15,12 L6,11 Z" /><TextBlock Text="{Binding SendButtonText}" /></StackPanel>
+                </Button>
             </Grid>
-        </Border>
+          </Border>
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+              <CheckBox x:Name="LoopIterationCheckBox" Content="{StaticResource LoopIterationText}" IsChecked="{Binding IsLoopIterationEnabled}" />
+              <CheckBox x:Name="AutomaticCompressionCheckBox" Content="{StaticResource AutomaticCompressionText}" IsChecked="{Binding IsAutomaticCompressionEnabled}" />
+              <CheckBox x:Name="EnableDotNetRunCheckBox" Content="{StaticResource EnableDotNetRunText}" IsChecked="{Binding IsDotNetRunEnabled}" ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+              <Button x:Name="CompressConversationButton" Classes="Secondary" Content="{StaticResource CompressConversationText}" Command="{Binding CompressConversationCommand}" IsEnabled="{Binding CanCompressConversation}" />
+              <Button x:Name="StopLanguageServerButton" Classes="Secondary" Content="{StaticResource StopLanguageServerText}" Command="{Binding StopLanguageServerCommand}" ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
+              <Button x:Name="NewSessionButton" Classes="Secondary" Content="{StaticResource NewSessionText}"
+                      Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).SessionListViewModel.CreateNewSessionCommand}" />
+            </StackPanel>
+          </Grid>
+        </Grid>
     </Grid>
 </UserControl>
