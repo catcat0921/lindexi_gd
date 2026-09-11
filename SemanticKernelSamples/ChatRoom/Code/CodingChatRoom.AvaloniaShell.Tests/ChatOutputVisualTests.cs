@@ -66,57 +66,6 @@ public sealed class ChatOutputVisualTests
         window.Close();
     }
 
-    [TestMethod]
-    public void ChatToolbarShouldLeaveRoomForMessagesAtMinimumWindowSize()
-    {
-        var view = new ChatView
-        {
-            DataContext = new CodingChatRoom.AvaloniaShell.ViewModels.ChatViewModel(),
-        };
-        var window = new Window { Width = 992, Height = 680, Content = view };
-
-        try
-        {
-            window.Show();
-            window.UpdateLayout();
-            var messages = view.FindControl<ScrollViewer>("MessagesScrollViewer")
-                ?? throw new InvalidOperationException("MessagesScrollViewer was not found.");
-
-            Assert.IsTrue(messages.Bounds.Top <= 150, $"Toolbar height: {messages.Bounds.Top}");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [TestMethod]
-    public void ModelSelectorShouldFitItsConfigurationColumn()
-    {
-        var view = new ChatView
-        {
-            DataContext = new CodingChatRoom.AvaloniaShell.ViewModels.ChatViewModel(),
-        };
-        var window = new Window { Width = 992, Height = 680, Content = view };
-
-        try
-        {
-            window.Show();
-            window.UpdateLayout();
-            var selector = view.FindControl<ComboBox>("ModelSelector")
-                ?? throw new InvalidOperationException("ModelSelector was not found.");
-            var parent = selector.Parent as Control
-                ?? throw new InvalidOperationException("Configuration parent was not found.");
-
-            Assert.IsTrue(selector.Bounds.Right <= parent.Bounds.Width,
-                $"Selector right: {selector.Bounds.Right}; column width: {parent.Bounds.Width}");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
     private static bool ContainsBlueFocusBorder(WriteableBitmap bitmap, TextBox textBox, Window window)
     {
         Point origin = textBox.TranslatePoint(default, window)
@@ -188,7 +137,7 @@ public sealed class ChatOutputVisualTests
             ?? throw new InvalidOperationException("无法获取思考强度选择器坐标。");
         double horizontalGap = reasoningOrigin.X - (modelOrigin.X + modelSelector.Bounds.Width);
 
-        Assert.AreEqual(25, horizontalGap, 0.5);
+        Assert.AreEqual(8, horizontalGap, 0.5);
 
         window.Close();
     }
@@ -227,7 +176,7 @@ public sealed class ChatOutputVisualTests
 
         var selectionBrush = textBox.SelectionBrush as ISolidColorBrush;
         var selectionForegroundBrush = textBox.SelectionForegroundBrush as ISolidColorBrush;
-        Assert.AreEqual(Color.Parse("#174BDC"), selectionBrush?.Color);
+        Assert.AreEqual(Color.Parse("#1976D2"), selectionBrush?.Color);
         Assert.AreEqual(Colors.White, selectionForegroundBrush?.Color);
 
         window.Close();

@@ -127,7 +127,6 @@ internal sealed class CodingChatApplication
         cancellationToken.ThrowIfCancellationRequested();
         AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: false);
         _chatManager.CreateNewSession();
-        _chatManager.SelectedSession.WorkspacePath = _workspaceController.NextRunWorkspacePath;
         AddOrUpdateSummary(_chatManager.SelectedSession, insertAtTop: true);
         OnStateChanged();
         return Task.CompletedTask;
@@ -254,6 +253,12 @@ internal sealed class CodingChatApplication
                     runCancellationTokenSource.Token
                 );
             await runResult.CompletionTask;
+            if (ReferenceEquals(_activeRunCancellationTokenSource, runCancellationTokenSource))
+            {
+                _activeRunCancellationTokenSource = null;
+                _isRunActive = false;
+                OnStateChanged();
+            }
         }
         catch (Exception exception)
         {

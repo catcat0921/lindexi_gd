@@ -1,48 +1,23 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Style Selector="Button">
-        <Setter Property="MinHeight" Value="30" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="CornerRadius" Value="5" />
-    </Style>
     <Style Selector="Button.Primary">
         <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextOnPrimaryBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="16,8" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="Button.Primary:pointerover">
         <Setter Property="Background" Value="{StaticResource PrimaryDarkBrush}" />
     </Style>
-    <Style Selector="Button.Secondary">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="10,5" />
-    </Style>
-    <Style Selector="Button.Secondary:pointerover">
-        <Setter Property="Background" Value="{StaticResource SurfaceVariantBrush}" />
-    </Style>
-    <Style Selector="Button.Flat, Button.Ghost">
+    <Style Selector="Button.Flat">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="CornerRadius" Value="6" />
     </Style>
-    <Style Selector="Button.Flat:pointerover, Button.Ghost:pointerover">
-        <Setter Property="Background" Value="{StaticResource SurfaceVariantBrush}" />
-    </Style>
-    <Style Selector="Button.Icon">
-        <Setter Property="MinWidth" Value="34" />
-        <Setter Property="Width" Value="34" />
-        <Setter Property="Height" Value="34" />
-        <Setter Property="Padding" Value="0" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="Button.Icon:pointerover">
+    <Style Selector="Button.Flat:pointerover">
         <Setter Property="Background" Value="{StaticResource SurfaceVariantBrush}" />
     </Style>
     <Style Selector="Button.Danger">
@@ -50,50 +25,12 @@
         <Setter Property="Foreground" Value="{StaticResource TextOnPrimaryBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="16,8" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="Button.SidebarPrimary">
-        <Setter Property="CornerRadius" Value="5" />
-    </Style>
-    <Style Selector="Button.SidebarTaskButton">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource SidebarTextBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="5" />
-    </Style>
-    <Style Selector="Button.SidebarTaskButton:pointerover">
-        <Setter Property="Background" Value="Transparent" />
-    </Style>
-    <Style Selector="Button.SidebarNavigation">
-        <Setter Property="MinHeight" Value="40" />
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource SidebarTextBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="12,9" />
-        <Setter Property="CornerRadius" Value="8" />
-    </Style>
-    <Style Selector="Button.SidebarNavigation.NavigationActive">
-        <Setter Property="Background" Value="{StaticResource SidebarHoverBrush}" />
-        <Setter Property="Foreground" Value="White" />
-    </Style>
-    <Style Selector="Button.SidebarNavigation:pointerover">
-        <Setter Property="Background" Value="{StaticResource SidebarHoverBrush}" />
+        <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="TextBox.Rounded">
-        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="Padding" Value="10,7" />
-    </Style>
-    <Style Selector="TextBox.ChatInput">
-        <Setter Property="MinHeight" Value="58" />
-        <Setter Property="MaxHeight" Value="120" />
-        <Setter Property="AcceptsReturn" Value="True" />
-        <Setter Property="TextWrapping" Value="Wrap" />
-        <Setter Property="CornerRadius" Value="9" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-        <Setter Property="Padding" Value="12,10" />
-        <Setter Property="VerticalContentAlignment" Value="Top" />
+        <Setter Property="Padding" Value="8,6" />
     </Style>
     <Style Selector="ListBoxItem.Card">
         <Setter Property="Padding" Value="12,10" />
@@ -104,38 +41,6 @@
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
         <Setter Property="CornerRadius" Value="8" />
     </Style>
-    <Style Selector="Border.WorkTaskCard">
-        <Setter Property="Background" Value="#1B2433" />
-        <Setter Property="BorderBrush" Value="#2A3548" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="10,7" />
-    </Style>
-    <Style Selector="Border.WorkTaskCard:pointerover">
-        <Setter Property="Background" Value="#1D2B43" />
-        <Setter Property="BorderBrush" Value="#3A4B66" />
-    </Style>
-    <Style Selector="Border.WorkTaskCardActive">
-        <Setter Property="Background" Value="#263858" />
-        <Setter Property="BorderBrush" Value="#4F8CFF" />
-        <Setter Property="BorderThickness" Value="3,1,1,1" />
-    </Style>
-    <Style Selector="Border.ChatToolbar">
-        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="#E2E7EF" />
-        <Setter Property="BorderThickness" Value="0,0,0,1" />
-    </Style>
-    <Style Selector="Border.ConfigurationGroup">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="#EDF0F6" />
-        <Setter Property="BorderThickness" Value="0,0,1,0" />
-        <Setter Property="CornerRadius" Value="0" />
-    </Style>
-    <Style Selector="Border.ChatComposer">
-        <Setter Property="Background" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="#DEE5EE" />
-        <Setter Property="BorderThickness" Value="0,1,0,0" />
-    </Style>
     <Style Selector="TextBlock.Title">
         <Setter Property="FontSize" Value="16" />
         <Setter Property="FontWeight" Value="Bold" />
@@ -144,23 +49,5 @@
     <Style Selector="TextBlock.Subtitle">
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-    </Style>
-    <Style Selector="TextBlock.SectionLabel">
-        <Setter Property="FontSize" Value="11" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
-    </Style>
-    <Style Selector="TextBlock.StatusText">
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="TextBlock.SidebarTitle">
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource SidebarTextBrush}" />
-    </Style>
-    <Style Selector="TextBlock.SidebarSecondary">
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="{StaticResource SidebarSecondaryTextBrush}" />
     </Style>
 </Styles>

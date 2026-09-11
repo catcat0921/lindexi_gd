@@ -8,8 +8,8 @@
         x:Class="CodingChatRoom.AvaloniaShell.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="avares://CodingChatRoom.AvaloniaShell/Assets/Icons/CodingChatRoom.ico"
-        MinWidth="1280"
-        MinHeight="720"
+        MinWidth="800"
+        MinHeight="520"
         Background="{StaticResource BackgroundBrush}">
     <Window.Title>
         <MultiBinding Converter="{StaticResource WorkspaceTitleConverter}"

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -19,7 +18,7 @@ internal sealed class CodingChatSettingsService
     };
 
     private readonly CodingChatRoomPaths _paths;
-    private readonly List<WindowsSandboxToolSource> _windowsSandboxToolSources = [];
+    private readonly WindowsSandboxToolSource _windowsSandboxToolSource;
 
     public CodingChatSettingsService
     (
@@ -30,16 +29,7 @@ internal sealed class CodingChatSettingsService
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(windowsSandboxToolSource);
         _paths = paths;
-        _windowsSandboxToolSources.Add(windowsSandboxToolSource);
-    }
-
-    public void RegisterWindowsSandboxToolSource(WindowsSandboxToolSource windowsSandboxToolSource)
-    {
-        ArgumentNullException.ThrowIfNull(windowsSandboxToolSource);
-        if (!_windowsSandboxToolSources.Contains(windowsSandboxToolSource))
-        {
-            _windowsSandboxToolSources.Add(windowsSandboxToolSource);
-        }
+        _windowsSandboxToolSource = windowsSandboxToolSource;
     }
 
     public async Task<CodingChatSettingsSnapshot> LoadAsync(CancellationToken cancellationToken = default)
@@ -91,15 +81,12 @@ internal sealed class CodingChatSettingsService
             cancellationToken
         ).ConfigureAwait(false);
 
-        foreach (WindowsSandboxToolSource windowsSandboxToolSource in _windowsSandboxToolSources)
-        {
-            windowsSandboxToolSource.UpdateConfiguration
-            (
-                shellSettings.IsWindowsSandboxEnabled,
-                shellSettings.WindowsSandboxToolPath,
-                shellSettings.WindowsSandboxServerAddress
-            );
-        }
+        _windowsSandboxToolSource.UpdateConfiguration
+        (
+            shellSettings.IsWindowsSandboxEnabled,
+            shellSettings.WindowsSandboxToolPath,
+            shellSettings.WindowsSandboxServerAddress
+        );
     }
 
     public async Task<CodingChatShellSettings> LoadShellSettingsAsync(CancellationToken cancellationToken = default)

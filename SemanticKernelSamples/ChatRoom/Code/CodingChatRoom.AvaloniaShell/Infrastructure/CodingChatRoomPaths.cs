@@ -11,14 +11,12 @@ public sealed class CodingChatRoomPaths
     private const string ApplicationFolderName = "CodingChatRoom";
     private const string ConfigurationFileName = "AgentConfiguration.json";
     private const string ShellSettingsFileName = "ShellSettings.json";
-    private const string WorkTasksFileName = "WorkTasks.json";
 
     private CodingChatRoomPaths(string rootDirectory)
     {
         RootDirectory = Path.GetFullPath(rootDirectory);
         ConfigurationFile = new FileInfo(Path.Join(RootDirectory, ConfigurationFileName));
         ShellSettingsFile = new FileInfo(Path.Join(RootDirectory, ShellSettingsFileName));
-        WorkTasksFile = new FileInfo(Path.Join(RootDirectory, WorkTasksFileName));
         LogDirectory = Path.Join(RootDirectory, "Logs");
         SessionDirectory = Path.Join(RootDirectory, "Sessions");
     }
@@ -37,11 +35,6 @@ public sealed class CodingChatRoomPaths
     /// 获取 Shell 设置文件。
     /// </summary>
     public FileInfo ShellSettingsFile { get; }
-
-    /// <summary>
-    /// 获取工作任务元数据文件。
-    /// </summary>
-    public FileInfo WorkTasksFile { get; }
 
     /// <summary>
     /// 获取文本日志目录。

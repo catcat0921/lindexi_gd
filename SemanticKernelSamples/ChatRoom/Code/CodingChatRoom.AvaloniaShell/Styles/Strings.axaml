@@ -4,20 +4,8 @@
     <Styles.Resources>
         <sys:String x:Key="ApplicationTitle">CodingChatRoom 编程助手</sys:String>
         <sys:String x:Key="SessionListTitle">历史会话</sys:String>
-        <sys:String x:Key="AllSessionsText">全部历史会话</sys:String>
-        <sys:String x:Key="NewWorkTaskText">新建工作任务</sys:String>
-        <sys:String x:Key="WorkTasksText">工作任务</sys:String>
-        <sys:String x:Key="ProductSubtitleText">AI 编程助手</sys:String>
-        <sys:String x:Key="WorkDirectoryText">工作目录</sys:String>
-        <sys:String x:Key="ModelText">模型</sys:String>
-        <sys:String x:Key="ReasoningEffortText">思考强度</sys:String>
-        <sys:String x:Key="SessionHistoryText">会话历史</sys:String>
-        <sys:String x:Key="MoreActionsText">更多任务操作</sys:String>
-        <sys:String x:Key="InputShortcutText">Ctrl+Enter 发送，Shift+Enter 换行</sys:String>
-        <sys:String x:Key="RenameWorkTaskText">重命名</sys:String>
-        <sys:String x:Key="EmptyWorkTaskText">请从左侧新建工作任务</sys:String>
         <sys:String x:Key="CurrentSessionText">当前会话</sys:String>
-        <sys:String x:Key="NewSessionText">+ 新建会话</sys:String>
+        <sys:String x:Key="NewSessionText">+ 新建</sys:String>
         <sys:String x:Key="EmptySessionListText">暂无匹配的历史会话</sys:String>
         <sys:String x:Key="HistorySearchText">搜索标题或工作路径</sys:String>
         <sys:String x:Key="HistoryLoadingText">正在加载历史会话…</sys:String>
@@ -32,7 +20,7 @@
         <sys:String x:Key="SessionWorkspaceText">工作路径：</sys:String>
         <sys:String x:Key="ChatTitle">编程助手</sys:String>
         <sys:String x:Key="ChatDescription">会话、工作区和模型发送能力将在后续阶段接入。</sys:String>
-        <sys:String x:Key="MessageInputPlaceholder">输入你的问题，支持多行输入…</sys:String>
+        <sys:String x:Key="MessageInputPlaceholder">输入编程问题（Ctrl+Enter 发送）</sys:String>
         <sys:String x:Key="AddImageText">添加图片</sys:String>
         <sys:String x:Key="RemoveImageText">移除图片</sys:String>
         <sys:String x:Key="OpenImageExternallyText">点击使用系统图片查看器打开</sys:String>
@@ -51,7 +39,7 @@
         <sys:String x:Key="ReasoningEffortToolTip">选择模型的思考强度；默认表示使用模型服务的默认设置</sys:String>
         <sys:String x:Key="SendText">发送</sys:String>
         <sys:String x:Key="CompressConversationText">压缩对话</sys:String>
-        <sys:String x:Key="StopText">停止任务</sys:String>
+        <sys:String x:Key="StopText">停止</sys:String>
         <sys:String x:Key="ToolInputText">输入参数</sys:String>
         <sys:String x:Key="ToolOutputText">工具输出</sys:String>
     </Styles.Resources>

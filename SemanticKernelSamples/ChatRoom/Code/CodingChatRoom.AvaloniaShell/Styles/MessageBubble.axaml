@@ -2,17 +2,17 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Style Selector="Border.MessageBubbleAssistant">
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Padding" Value="14,11" />
-        <Setter Property="BorderBrush" Value="#F0F3F8" />
+        <Setter Property="CornerRadius" Value="12,12,12,4" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
     </Style>
     <Style Selector="Border.MessageBubbleUser">
-        <Setter Property="Background" Value="#EAF0F9" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Padding" Value="14,11" />
+        <Setter Property="Background" Value="{StaticResource PrimaryLightBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12,12,4,12" />
+        <Setter Property="Padding" Value="12,8" />
     </Style>
     <Style Selector="Border.MessageBubbleSystem">
         <Setter Property="Background" Value="{StaticResource SurfaceVariantBrush}" />
@@ -27,16 +27,15 @@
         <Setter Property="IsReadOnly" Value="True" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="SelectionBrush" Value="#BBDEFB" />
+        <Setter Property="SelectionBrush" Value="{StaticResource PrimaryLightBrush}" />
         <Setter Property="SelectionForegroundBrush" Value="{StaticResource TextPrimaryBrush}" />
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="VerticalContentAlignment" Value="Top" />
     </Style>
-    <Style Selector="TextBox.ChatOutput:focus, TextBox.ChatOutput:focus-visible, TextBox.ChatOutput:focus-within">
+    <Style Selector="TextBox.ChatOutput:focus">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="FocusAdorner" Value="{x:Null}" />
     </Style>
     <Style Selector="TextBox.ChatOutput /template/ Border#PART_BorderElement">
         <Setter Property="Background" Value="Transparent" />
@@ -64,14 +63,6 @@
         <Setter Property="Margin" Value="0,4" />
         <Setter Property="BorderBrush" Value="#FF90A4AE" />
         <Setter Property="BorderThickness" Value="3,0,0,0" />
-    </Style>
-    <Style Selector="Expander.ToolCall">
-        <Setter Property="Background" Value="#F1F4FA" />
-        <Setter Property="BorderBrush" Value="#EAF0F7" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="FontSize" Value="12" />
     </Style>
     <Style Selector="Border.ToolPanel">
         <Setter Property="Background" Value="#FFF5F5F5" />

@@ -32,7 +32,6 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     private bool _isAutomaticCompressionEnabled = true;
     private bool _isDotNetRunEnabled;
     private bool _isDisposed;
-    private string _workTaskDisplayName = "工作任务";
 
     /// <summary>
     /// 初始化尚未接入模型发送的聊天视图骨架。
@@ -97,15 +96,6 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         InitializeAvailableModels();
         InitializeReasoningEfforts();
         AttachSession(_chatManager.SelectedSession);
-    }
-
-    /// <summary>
-    /// 获取当前聊天所属的工作任务名称。
-    /// </summary>
-    public string WorkTaskDisplayName
-    {
-        get => _workTaskDisplayName;
-        internal set => SetField(ref _workTaskDisplayName, value);
     }
 
     /// <summary>
@@ -174,22 +164,6 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// 获取发送按钮文本。
     /// </summary>
     public string SendButtonText => IsRunning ? "插话" : "发送";
-
-    /// <summary>
-    /// 获取当前任务的简要运行状态。
-    /// </summary>
-    public string OperationStatusText => IsCompressing
-        ? "正在压缩"
-        : IsChangingWorkspace
-            ? "正在应用工作目录"
-            : IsRunning
-                ? "工作中"
-                : "空闲";
-
-    /// <summary>
-    /// 获取当前任务是否正在执行操作。
-    /// </summary>
-    public bool IsWorking => IsRunning || IsCompressing || IsChangingWorkspace;
 
     /// <summary>
     /// 获取消息投影集合。
@@ -347,7 +321,7 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// 获取当前是否可以应用工作路径。
     /// </summary>
-    public bool CanApplyWorkspace => _workspaceController is not null && !IsChangingWorkspace && !IsRunning && !IsCompressing;
+    public bool CanApplyWorkspace => _workspaceController is not null && !IsChangingWorkspace;
 
     private void InitializeReasoningEfforts()
     {
@@ -450,8 +424,6 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         else if (e.PropertyName == nameof(CodingWorkspaceController.IsChangingWorkspace))
         {
             OnPropertyChanged(nameof(IsChangingWorkspace));
-            OnPropertyChanged(nameof(IsWorking));
-            OnPropertyChanged(nameof(OperationStatusText));
             OnPropertyChanged(nameof(CanApplyWorkspace));
             RaiseCommandCanExecuteChanged();
         }
@@ -480,12 +452,6 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
             Trace.TraceError($"工作路径切换失败：{exception}");
             await AddSystemMessageAsync(session, $"工作路径切换失败：{exception.Message}").ConfigureAwait(true);
         }
-    }
-
-    internal void ClearDraft()
-    {
-        InputText = string.Empty;
-        PendingImages.Clear();
     }
 
     /// <inheritdoc />
@@ -523,11 +489,8 @@ public sealed class ChatViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanCompressConversation));
         OnPropertyChanged(nameof(CanStopLanguageServer));
-        OnPropertyChanged(nameof(CanApplyWorkspace));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(IsCompressing));
-        OnPropertyChanged(nameof(IsWorking));
-        OnPropertyChanged(nameof(OperationStatusText));
         OnPropertyChanged(nameof(SendButtonText));
         RaiseCommandCanExecuteChanged();
     }

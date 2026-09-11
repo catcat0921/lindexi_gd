@@ -1,25 +1,19 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <Color x:Key="PrimaryColor">#2460FF</Color>
-        <Color x:Key="PrimaryLightColor">#DBEAFE</Color>
-        <Color x:Key="PrimaryDarkColor">#174BDC</Color>
-        <Color x:Key="BackgroundColor">#F6F8FC</Color>
+        <Color x:Key="PrimaryColor">#2196F3</Color>
+        <Color x:Key="PrimaryLightColor">#BBDEFB</Color>
+        <Color x:Key="PrimaryDarkColor">#1976D2</Color>
+        <Color x:Key="BackgroundColor">#F5F5F5</Color>
         <Color x:Key="SurfaceColor">#FFFFFF</Color>
-        <Color x:Key="SurfaceVariantColor">#EEF2F7</Color>
-        <Color x:Key="SidebarColor">#1A2230</Color>
-        <Color x:Key="SidebarSurfaceColor">#1F2937</Color>
-        <Color x:Key="SidebarHoverColor">#273449</Color>
-        <Color x:Key="SidebarTextColor">#F8FAFC</Color>
-        <Color x:Key="SidebarSecondaryTextColor">#94A3B8</Color>
-        <Color x:Key="RunningColor">#3B82F6</Color>
+        <Color x:Key="SurfaceVariantColor">#EEEEEE</Color>
         <Color x:Key="SuccessColor">#4CAF50</Color>
         <Color x:Key="WarningColor">#FF9800</Color>
-        <Color x:Key="ErrorColor">#E52B45</Color>
-        <Color x:Key="TextPrimaryColor">#303B52</Color>
-        <Color x:Key="TextSecondaryColor">#8490A7</Color>
+        <Color x:Key="ErrorColor">#F44336</Color>
+        <Color x:Key="TextPrimaryColor">#212121</Color>
+        <Color x:Key="TextSecondaryColor">#757575</Color>
         <Color x:Key="TextOnPrimaryColor">#FFFFFF</Color>
-        <Color x:Key="BorderColor">#E1E7F1</Color>
+        <Color x:Key="BorderColor">#E0E0E0</Color>
         <Color x:Key="DividerColor">#BDBDBD</Color>
         <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}" />
         <SolidColorBrush x:Key="PrimaryLightBrush" Color="{StaticResource PrimaryLightColor}" />
@@ -27,12 +21,6 @@
         <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
         <SolidColorBrush x:Key="SurfaceVariantBrush" Color="{StaticResource SurfaceVariantColor}" />
-        <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource SidebarColor}" />
-        <SolidColorBrush x:Key="SidebarSurfaceBrush" Color="{StaticResource SidebarSurfaceColor}" />
-        <SolidColorBrush x:Key="SidebarHoverBrush" Color="{StaticResource SidebarHoverColor}" />
-        <SolidColorBrush x:Key="SidebarTextBrush" Color="{StaticResource SidebarTextColor}" />
-        <SolidColorBrush x:Key="SidebarSecondaryTextBrush" Color="{StaticResource SidebarSecondaryTextColor}" />
-        <SolidColorBrush x:Key="RunningBrush" Color="{StaticResource RunningColor}" />
         <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
         <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
         <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
