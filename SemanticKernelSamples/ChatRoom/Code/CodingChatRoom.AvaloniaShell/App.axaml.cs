@@ -39,19 +39,13 @@ public partial class App : Application
                 paths,
                 new AvaloniaMainThreadDispatcher()).ConfigureAwait(true);
 
-            var mainViewModel = new MainViewModel(
-                new SessionListViewModel(_runtime.Application),
-                new ChatViewModel(
-                    _runtime.ChatManager,
-                    _runtime.Application,
-                    _runtime.WorkspaceController,
-                    $"当前模型：{_runtime.ModelDisplayName}"),
-                _runtime.SettingsService);
+            var mainViewModel = new MainViewModel(_runtime);
             var mainWindow = new MainWindow()
             {
                 DataContext = mainViewModel,
             };
             desktop.MainWindow = mainWindow;
+            desktop.ShutdownRequested += OnShutdownRequested;
             mainWindow.Show();
         }
         catch (Exception exception)
@@ -67,5 +61,16 @@ public partial class App : Application
             desktop.MainWindow = failureWindow;
             failureWindow.Show();
         }
+    }
+
+    private async void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        if (_runtime is null)
+        {
+            return;
+        }
+
+        await _runtime.DisposeAsync().ConfigureAwait(true);
+        _runtime = null;
     }
 }

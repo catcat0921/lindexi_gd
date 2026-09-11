@@ -17,6 +17,9 @@ namespace CodingChatRoom.AvaloniaShell.ViewModels;
 public sealed class SessionListViewModel : ViewModelBase
 {
     private readonly CodingChatApplication? _application;
+    private readonly Func<CodingChatApplication?>? _applicationProvider;
+    private Guid? _targetWorkTaskId;
+    private string? _targetWorkTaskName;
     private string _searchText = string.Empty;
     private string? _errorMessage;
     private bool _isLoading;
@@ -35,26 +38,30 @@ public sealed class SessionListViewModel : ViewModelBase
     {
         _createNewSessionCommand = new SimpleAsyncCommand(() => RunOperationAsync(async () =>
         {
-            if (_application is null) return;
-            await _application.CreateNewSessionAsync();
-            SessionOpened?.Invoke(this, EventArgs.Empty);
+            CodingChatApplication? application = CurrentApplication;
+            if (application is null) return;
+            await application.CreateNewSessionAsync();
+            SessionOpened?.Invoke(this, _targetWorkTaskId);
         }), () => CanChangeSession);
         _openSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
         {
-            if (_application is null || item is null) return;
-            await _application.OpenSessionAsync(item.SessionId);
-            SessionOpened?.Invoke(this, EventArgs.Empty);
+            CodingChatApplication? application = CurrentApplication;
+            if (application is null || item is null) return;
+            await application.OpenSessionAsync(item.SessionId);
+            SessionOpened?.Invoke(this, _targetWorkTaskId);
         }), CanExecute);
         _deleteSessionCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
         {
-            if (_application is not null && item is not null)
-                await _application.DeleteSessionAsync(item.SessionId);
+            CodingChatApplication? application = CurrentApplication;
+            if (application is not null && item is not null)
+                await application.DeleteSessionAsync(item.SessionId);
         }), CanExecute);
         _saveTitleCommand = new SimpleAsyncCommand<SessionItemViewModel>(item => RunOperationAsync(async () =>
         {
-            if (_application is not null && item is not null && !string.IsNullOrWhiteSpace(item.EditedTitle))
+            CodingChatApplication? application = CurrentApplication;
+            if (application is not null && item is not null && !string.IsNullOrWhiteSpace(item.EditedTitle))
             {
-                await _application.RenameSessionAsync(item.SessionId, item.EditedTitle);
+                await application.RenameSessionAsync(item.SessionId, item.EditedTitle);
                 item.IsEditing = false;
             }
         }), CanExecute);
@@ -80,12 +87,21 @@ public sealed class SessionListViewModel : ViewModelBase
         Refresh();
     }
 
-    internal event EventHandler? SessionOpened;
+    internal SessionListViewModel(Func<CodingChatApplication?> applicationProvider) : this()
+    {
+        ArgumentNullException.ThrowIfNull(applicationProvider);
+        _applicationProvider = applicationProvider;
+    }
+
+    internal event EventHandler<Guid?>? SessionOpened;
+
+    private CodingChatApplication? CurrentApplication => _applicationProvider?.Invoke() ?? _application;
 
     public ObservableCollection<SessionItemViewModel> Sessions { get; } = [];
     public bool IsEmpty => !IsLoading && Sessions.Count == 0;
-    public bool CanChangeSession => (_application?.CanChangeSession ?? false) && !_isOperating;
-    public SessionItemViewModel? SelectedSession => Sessions.FirstOrDefault(item => item.SessionId == _application?.SelectedSessionId);
+    public bool CanChangeSession => (CurrentApplication?.CanChangeSession ?? false) && !_isOperating;
+    public SessionItemViewModel? SelectedSession => Sessions.FirstOrDefault(item => item.SessionId == CurrentApplication?.SelectedSessionId);
+    public string TargetText => string.IsNullOrWhiteSpace(_targetWorkTaskName) ? "" : $"打开到：{_targetWorkTaskName}";
     public string SearchText
     {
         get => _searchText;
@@ -114,14 +130,24 @@ public sealed class SessionListViewModel : ViewModelBase
     /// </summary>
     public Task LoadAsync() => _hasLoaded ? Task.CompletedTask : LoadCoreAsync();
 
+    internal void Navigate(Guid? targetWorkTaskId, string? targetWorkTaskName, string searchText)
+    {
+        _targetWorkTaskId = targetWorkTaskId;
+        _targetWorkTaskName = targetWorkTaskName;
+        SearchText = searchText ?? string.Empty;
+        OnPropertyChanged(nameof(TargetText));
+        Refresh();
+    }
+
     private async Task LoadCoreAsync()
     {
-        if (_application is null || IsLoading) return;
+        CodingChatApplication? application = CurrentApplication;
+        if (application is null || IsLoading) return;
         IsLoading = true;
         ErrorMessage = null;
         try
         {
-            await _application.InitializeAsync();
+            await application.InitializeAsync();
             _hasLoaded = true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Text.Json.JsonException or System.Xml.XmlException)
@@ -161,12 +187,13 @@ public sealed class SessionListViewModel : ViewModelBase
 
     private void Refresh()
     {
-        if (_application is null) return;
+        CodingChatApplication? application = CurrentApplication;
+        if (application is null) return;
         string query = SearchText.Trim();
-        var activeIds = _application.Sessions.Select(summary => summary.SessionId).ToHashSet();
+        var activeIds = application.Sessions.Select(summary => summary.SessionId).ToHashSet();
         foreach (Guid id in _items.Keys.Where(id => !activeIds.Contains(id)).ToArray()) _items.Remove(id);
         var visible = new System.Collections.Generic.List<SessionItemViewModel>();
-        foreach (CopilotChatSessionSummary summary in _application.Sessions)
+        foreach (CopilotChatSessionSummary summary in application.Sessions)
         {
             if (!_items.TryGetValue(summary.SessionId, out var item))
             {
@@ -198,7 +225,7 @@ public sealed class SessionListViewModel : ViewModelBase
     {
         foreach (SessionItemViewModel item in _items.Values)
         {
-            item.IsCurrent = item.SessionId == _application?.SelectedSessionId;
+            item.IsCurrent = item.SessionId == CurrentApplication?.SelectedSessionId;
         }
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(CanChangeSession));

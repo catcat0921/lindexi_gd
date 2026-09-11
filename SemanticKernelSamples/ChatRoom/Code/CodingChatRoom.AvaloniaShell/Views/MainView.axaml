@@ -4,29 +4,243 @@
              xmlns:views="using:CodingChatRoom.AvaloniaShell.Views"
              x:Class="CodingChatRoom.AvaloniaShell.Views.MainView"
              x:DataType="vm:MainViewModel">
-    <Grid>
-        <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsChatOpen}">
-            <Border Padding="12,8" Background="{StaticResource SurfaceBrush}">
-                <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button Name="NewSessionButton" Classes="Primary" Content="{StaticResource NewSessionText}"
-                                Command="{Binding SessionListViewModel.CreateNewSessionCommand}" />
-                        <Button Name="HistoryButton" Content="{StaticResource SessionListTitle}"
-                                Command="{Binding OpenHistoryCommand}" />
+    <Grid ColumnDefinitions="288,*">
+        <Border Background="{StaticResource SidebarBrush}"
+                BorderBrush="#26354B"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="12,14,12,12"
+                  RowDefinitions="Auto,Auto,Auto,*,Auto"
+                  RowSpacing="14">
+                <Grid ColumnDefinitions="32,*" ColumnSpacing="10">
+                    <Border Width="32"
+                            Height="32"
+                            Background="#1D4ED8"
+                            BorderBrush="#4FA3FF"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Image Width="26"
+                               Height="26"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Source="avares://CodingChatRoom.AvaloniaShell/Assets/Icons/CodingChatRoom_48x48.png" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="CodingChatRoom"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource SidebarTextBrush}" />
+                        <TextBlock Text="{StaticResource ProductSubtitleText}"
+                                   FontSize="12"
+                                   Foreground="#9FB0C8" />
                     </StackPanel>
-                    <Button Grid.Column="1" Name="SettingsButton" Classes="Flat"
-                            Content="{StaticResource SettingsNavigationText}" Command="{Binding OpenSettingsCommand}" />
                 </Grid>
-            </Border>
-            <views:ChatView Grid.Row="1" DataContext="{Binding ChatViewModel}" />
+
+                <Button Grid.Row="1"
+                        Name="CreateWorkTaskButton"
+                        Classes="Primary SidebarPrimary"
+                        Height="36"
+                        HorizontalAlignment="Stretch"
+                        Command="{Binding CreateWorkTaskCommand}">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="9">
+                        <PathIcon Width="17"
+                                  Height="17"
+                                  Data="M11,5 L13,5 L13,11 L19,11 L19,13 L13,13 L13,19 L11,19 L11,13 L5,13 L5,11 L11,11 Z" />
+                        <TextBlock Text="{StaticResource NewWorkTaskText}"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </Button>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="2,0">
+                    <TextBlock Text="{StaticResource WorkTasksText}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="#CBD5E1" />
+                    <Border Grid.Column="1"
+                            MinWidth="25"
+                            Padding="7,2"
+                            Background="#26364F"
+                            CornerRadius="12">
+                        <TextBlock Text="{Binding WorkTaskCountText}"
+                                   HorizontalAlignment="Center"
+                                   FontSize="11"
+                                   Foreground="#B7C5D8" />
+                    </Border>
+                </Grid>
+
+                <ListBox Grid.Row="3"
+                         ItemsSource="{Binding WorkTasks}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0,0,0,10" />
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                        <Style Selector="ListBoxItem:pointerover /template/ Border#PART_LayoutRoot">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ Border#PART_LayoutRoot">
+                            <Setter Property="Background" Value="Transparent" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:WorkTaskItemViewModel">
+                            <Border Classes="WorkTaskCard"
+                                    Classes.WorkTaskCardActive="{Binding IsActive}">
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="4">
+                                    <Grid ColumnDefinitions="*,34" ColumnSpacing="8">
+                                        <Button Classes="SidebarTaskButton"
+                                                MinHeight="28"
+                                                Padding="0"
+                                                HorizontalContentAlignment="Left"
+                                                Command="{Binding $parent[UserControl].DataContext.ActivateWorkTaskCommand}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource SidebarTextBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       IsVisible="{Binding !IsEditing}" />
+                                        </Button>
+                                        <Menu Grid.Column="1"
+                                              Height="30"
+                                              HorizontalAlignment="Right"
+                                              Background="Transparent"
+                                              Foreground="{StaticResource SidebarTextBrush}">
+                                            <MenuItem ToolTip.Tip="{StaticResource MoreActionsText}">
+                                                <MenuItem.Header>
+                                                    <PathIcon Width="18"
+                                                              Height="18"
+                                                              Data="M5,10 A2,2 0 1 0 5,14 A2,2 0 1 0 5,10 M12,10 A2,2 0 1 0 12,14 A2,2 0 1 0 12,10 M19,10 A2,2 0 1 0 19,14 A2,2 0 1 0 19,10" />
+                                                </MenuItem.Header>
+                                                <MenuItem Header="{StaticResource NewSessionText}"
+                                                          Command="{Binding $parent[UserControl].DataContext.CreateSessionForTaskCommand}"
+                                                          CommandParameter="{Binding}" />
+                                                <MenuItem Header="{StaticResource SessionHistoryText}"
+                                                          Command="{Binding $parent[UserControl].DataContext.OpenTaskHistoryCommand}"
+                                                          CommandParameter="{Binding}" />
+                                                <Separator />
+                                                <MenuItem Header="{StaticResource RenameWorkTaskText}"
+                                                          Command="{Binding $parent[UserControl].DataContext.EditWorkTaskNameCommand}"
+                                                          CommandParameter="{Binding}" />
+                                                <MenuItem Header="{StaticResource DeleteSessionText}"
+                                                          Command="{Binding $parent[UserControl].DataContext.DeleteWorkTaskCommand}"
+                                                          CommandParameter="{Binding}" />
+                                            </MenuItem>
+                                        </Menu>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1"
+                                          ColumnDefinitions="*,Auto,Auto"
+                                          IsVisible="{Binding IsEditing}">
+                                        <TextBox Text="{Binding EditedDisplayName}" />
+                                        <Button Grid.Column="1"
+                                                Margin="6,0,0,0"
+                                                Content="{StaticResource SaveTitleText}"
+                                                Command="{Binding $parent[UserControl].DataContext.SaveWorkTaskNameCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="2"
+                                                Margin="6,0,0,0"
+                                                Content="{StaticResource CancelEditText}"
+                                                Command="{Binding $parent[UserControl].DataContext.CancelWorkTaskNameCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="1"
+                                          ColumnDefinitions="Auto,*"
+                                          ColumnSpacing="7"
+                                          IsVisible="{Binding !IsEditing}">
+                                        <PathIcon Width="14"
+                                                  Height="14"
+                                                  Foreground="#8294AD"
+                                                  Data="M3,5 L10,5 L12,7 L21,7 L21,19 L3,19 Z M5,9 L5,17 L19,17 L19,9 Z" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding WorkspacePath}"
+                                                   FontSize="12"
+                                                   Foreground="#93A4BC"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding WorkspacePath}" />
+                                    </Grid>
+
+                                    <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                        <Ellipse Width="8"
+                                                 Height="8"
+                                                 VerticalAlignment="Center"
+                                                 Fill="#73849C"
+                                                 IsVisible="{Binding !IsWorking}" />
+                                        <Ellipse Width="8"
+                                                 Height="8"
+                                                 VerticalAlignment="Center"
+                                                 Fill="#4F8CFF"
+                                                 IsVisible="{Binding IsWorking}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayStatusText}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Foreground="#A8B6CA" />
+                                    </Grid>
+
+                                    <ProgressBar Grid.Row="3"
+                                                 Height="3"
+                                                 IsIndeterminate="True"
+                                                 IsVisible="{Binding IsWorking}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel Grid.Row="4" Spacing="6">
+                    <Border Height="1" Margin="0,0,0,8" Background="#304058" />
+                    <Button Name="HistoryButton"
+                            Classes="SidebarNavigation"
+                            Classes.NavigationActive="{Binding IsHistoryOpen}"
+                            Command="{Binding OpenHistoryCommand}"
+                            HorizontalAlignment="Stretch">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <PathIcon Width="18"
+                                      Height="18"
+                                      Data="M12,3 A9,9 0 1 1 5.64,5.64 L3,3 L9,3 L9,9 L6.9,6.9 A7,7 0 1 0 12,5 Z M11,7 L13,7 L13,12 L17,14 L16,16 L11,13 Z" />
+                            <TextBlock Text="{StaticResource AllSessionsText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Name="SettingsButton"
+                            Classes="SidebarNavigation"
+                            Classes.NavigationActive="{Binding IsSettingsOpen}"
+                            Command="{Binding OpenSettingsCommand}"
+                            HorizontalAlignment="Stretch">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <PathIcon Width="18"
+                                      Height="18"
+                                      Data="M10,2 L14,2 L15,5 L18,6 L21,4 L24,8 L22,10 L22,14 L24,16 L21,20 L18,18 L15,19 L14,22 L10,22 L9,19 L6,18 L3,20 L0,16 L2,14 L2,10 L0,8 L3,4 L6,6 L9,5 Z M12,8 A4,4 0 1 0 12,16 A4,4 0 1 0 12,8" />
+                            <TextBlock Text="{StaticResource SettingsNavigationText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Background="{StaticResource BackgroundBrush}">
+            <Panel IsVisible="{Binding IsChatOpen}">
+                <views:ChatView DataContext="{Binding ChatViewModel}" />
+            </Panel>
+            <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsHistoryOpen}">
+                <Button Margin="20,16"
+                        Classes="Secondary"
+                        HorizontalAlignment="Left"
+                        Content="{StaticResource BackToChatText}"
+                        Command="{Binding CloseHistoryCommand}" />
+                <views:SessionListView Grid.Row="1" DataContext="{Binding SessionListViewModel}" />
+            </Grid>
+            <Panel IsVisible="{Binding IsSettingsOpen}">
+                <views:SettingsView DataContext="{Binding SettingsViewModel}" />
+            </Panel>
         </Grid>
-        <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsHistoryOpen}">
-            <Button Margin="16,12" HorizontalAlignment="Left" Content="{StaticResource BackToChatText}"
-                    Command="{Binding CloseHistoryCommand}" />
-            <views:SessionListView Grid.Row="1" DataContext="{Binding SessionListViewModel}" />
-        </Grid>
-        <Panel IsVisible="{Binding IsSettingsOpen}">
-            <views:SettingsView DataContext="{Binding SettingsViewModel}" />
-        </Panel>
     </Grid>
 </UserControl>

@@ -23,6 +23,7 @@ public sealed class CodingChatStartupTests
             paths.ConfigurationFile.FullName);
         Assert.AreEqual(Path.Join(paths.RootDirectory, "Logs"), paths.LogDirectory);
         Assert.AreEqual(Path.Join(paths.RootDirectory, "Sessions"), paths.SessionDirectory);
+        Assert.AreEqual(Path.Join(paths.RootDirectory, "WorkTasks.json"), paths.WorkTasksFile.FullName);
     }
 
     [TestMethod(DisplayName = "目录初始化不应生成配置文件")]
@@ -80,7 +81,7 @@ public sealed class CodingChatStartupTests
             paths,
             new ImmediateMainThreadDispatcher());
 
-        Assert.AreEqual("test-provider/test-model", runtime.ModelDisplayName);
+        Assert.AreEqual("test-provider/test-model", GetModelDisplayName(runtime.WorkTasks.Single()));
     }
 
     [TestMethod(DisplayName = "未知首选模型时启动应保留模型管理器异常")]
@@ -113,9 +114,16 @@ public sealed class CodingChatStartupTests
             paths,
             new ImmediateMainThreadDispatcher());
 
-        Assert.AreEqual(paths.LogDirectory, runtime.ChatLogger.ChatLogFolder);
-        Assert.AreEqual("test-provider/test-model", runtime.ModelDisplayName);
-        Assert.AreSame(runtime.EndpointManager, runtime.ChatManager.AgentApiEndpointManager);
+        CodingWorkTaskRuntime workTask = runtime.WorkTasks.Single();
+        Assert.AreEqual(paths.LogDirectory, workTask.ChatLogger.ChatLogFolder);
+        Assert.AreEqual("test-provider/test-model", GetModelDisplayName(workTask));
+        Assert.AreSame(workTask.EndpointManager, workTask.ChatManager.AgentApiEndpointManager);
+    }
+
+    private static string GetModelDisplayName(CodingWorkTaskRuntime workTask)
+    {
+        ILanguageModel model = workTask.EndpointManager.PrimaryModel;
+        return $"{model.ModelDefinition.Provider}/{model.ModelDefinition.ModelName}";
     }
 
     private static AgentApiManagerConfiguration CreateConfiguration(string? primaryModel, string key)

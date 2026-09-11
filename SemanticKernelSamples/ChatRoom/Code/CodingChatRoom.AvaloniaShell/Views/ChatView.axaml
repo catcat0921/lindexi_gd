@@ -5,6 +5,12 @@
              xmlns:views="using:CodingChatRoom.AvaloniaShell.Views"
              x:Class="CodingChatRoom.AvaloniaShell.Views.ChatView"
              x:DataType="vm:ChatViewModel">
+    <UserControl.Styles>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+    </UserControl.Styles>
     <UserControl.Resources>
         <DataTemplate x:Key="AssistantTextItemTemplate" x:DataType="model:CopilotChatTextItem">
             <TextBox Classes="ChatOutput"
@@ -57,7 +63,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="AssistantToolItemTemplate" x:DataType="model:CopilotChatToolItem">
-            <Expander Margin="0,0,0,8">
+            <Expander Classes="ToolCall" Margin="0,0,0,8" HorizontalAlignment="Stretch">
                 <Expander.Header>
                     <Grid ColumnDefinitions="Auto,*,Auto"
                           ColumnSpacing="8"
@@ -166,58 +172,142 @@
                                                ImageItemTemplate="{StaticResource ImageItemTemplate}" />
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,*,Auto">
-        <Border Grid.Row="0"
-                Padding="12,8"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="*,Auto"
-                  ColumnSpacing="8">
-                <Grid Grid.Column="0"
-                      ColumnDefinitions="*,Auto"
-                      ColumnSpacing="8">
-                    <TextBox Grid.Column="0"
-                             MinHeight="32"
-                             Classes="Rounded"
-                             ToolTip.Tip="{Binding WorkspaceStatusText}"
-                             Text="{Binding WorkspaceInput, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="输入本地代码目录；留空后应用可清除工作区"
-                             IsEnabled="{Binding !IsChangingWorkspace}" />
-                    <Button Grid.Column="1"
-                            MinWidth="72"
-                            MinHeight="32"
-                            Classes="Primary"
-                            Content="应用"
-                            Command="{Binding ApplyWorkspaceCommand}"
-                            IsEnabled="{Binding CanApplyWorkspace}" />
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Border Grid.Row="0" Classes="ChatToolbar" Padding="18,10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <Grid ColumnDefinitions="Auto,*,80" ColumnSpacing="14">
+                    <TextBlock Text="{Binding WorkTaskDisplayName}"
+                               FontSize="18"
+                               MaxWidth="260"
+                               VerticalAlignment="Center"
+                               FontWeight="Bold"
+                               Foreground="#172033"
+                               TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border Padding="9,4"
+                                Background="#EEF3F8"
+                                CornerRadius="12"
+                                IsVisible="{Binding !IsWorking}">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="#8190A5" />
+                                <TextBlock Text="{Binding OperationStatusText}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="#526174" />
+                            </StackPanel>
+                        </Border>
+                        <Border Padding="9,4"
+                                Background="#E8F1FF"
+                                CornerRadius="12"
+                                IsVisible="{Binding IsWorking}">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="#3478F6" />
+                                <TextBlock Text="{Binding OperationStatusText}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="#1D5FC7" />
+                            </StackPanel>
+                        </Border>
+                        <Border Width="1" Height="18" Background="#DCE3EC" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   MaxWidth="300"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   Foreground="#657286"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding StatusText}" />
+                    </StackPanel>
+                    <ProgressBar Grid.Column="2" Height="3"
+                                 Width="80"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsWorking}" />
                 </Grid>
+                <Button Grid.Column="1"
+                        MinWidth="96"
+                        Classes="Danger"
+                        Command="{Binding StopCommand}"
+                        IsVisible="{Binding IsRunning}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Width="14" Height="14" Data="M5,5 L19,5 L19,19 L5,19 Z" />
+                        <TextBlock Text="{StaticResource StopText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
 
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            Spacing="8">
+        <Border Grid.Row="1" Classes="ChatToolbar" Padding="18,8,18,10">
+            <Grid ColumnDefinitions="240,*,180,140" ColumnSpacing="12">
+                <Border Grid.Column="0" Classes="ConfigurationGroup" Padding="0,0,12,0">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <TextBlock Text="{StaticResource CurrentSessionText}" Foreground="{StaticResource PrimaryBrush}" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentSessionTitle}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CurrentSessionTitle}" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="Secondary" Content="{StaticResource NewSessionText}"
+                                    Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).CreateSessionForTaskCommand}"
+                                    CommandParameter="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).ActiveWorkTask}" />
+                            <Button Classes="Secondary" Content="{StaticResource SessionHistoryText}"
+                                    Command="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).OpenTaskHistoryCommand}"
+                                    CommandParameter="{Binding $parent[views:MainView].((vm:MainViewModel)DataContext).ActiveWorkTask}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Classes="ConfigurationGroup" Padding="0,0,12,0">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{StaticResource WorkDirectoryText}" Classes="SectionLabel" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox Classes="Rounded"
+                                 ToolTip.Tip="{Binding WorkspaceStatusText}"
+                                 Text="{Binding WorkspaceInput, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="输入本地代码目录"
+                                 IsEnabled="{Binding !IsWorking}" />
+                        <Button Grid.Column="1"
+                                MinWidth="68"
+                                Classes="Primary"
+                                Content="应用"
+                                Command="{Binding ApplyWorkspaceCommand}"
+                                IsEnabled="{Binding CanApplyWorkspace}" />
+                    </Grid>
+                    <TextBlock Text="{Binding WorkspaceStatusText}"
+                               Classes="Subtitle"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding WorkspaceStatusText}" />
+                </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Classes="ConfigurationGroup" Padding="0,0,12,0">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{StaticResource ModelText}" Classes="SectionLabel" />
                     <ComboBox x:Name="ModelSelector"
-                              Width="220"
-                              MinHeight="32"
+                              HorizontalAlignment="Stretch"
+                              MinHeight="34"
                               ToolTip.Tip="选择语言模型"
                               ItemsSource="{Binding AvailableModels}"
                               SelectedItem="{Binding SelectedModel}"
-                              IsEnabled="{Binding !IsRunning}">
+                              IsEnabled="{Binding !IsWorking}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:LanguageModelOptionViewModel">
-                                <TextBlock Text="{Binding DisplayName}"
-                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
+                </StackPanel>
+                </Border>
 
+                <Border Grid.Column="3" Padding="0">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{StaticResource ReasoningEffortText}" Classes="SectionLabel" />
                     <ComboBox x:Name="ReasoningEffortSelector"
-                              Width="96"
-                              MinHeight="32"
+                              HorizontalAlignment="Stretch"
+                              MinHeight="34"
                               ToolTip.Tip="{StaticResource ReasoningEffortToolTip}"
                               ItemsSource="{Binding AvailableReasoningEfforts}"
                               SelectedItem="{Binding SelectedReasoningEffort}"
-                              IsEnabled="{Binding !IsRunning}">
+                              IsEnabled="{Binding !IsWorking}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:ReasoningEffortOptionViewModel">
                                 <TextBlock Text="{Binding DisplayName}" />
@@ -225,27 +315,33 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
         <ScrollViewer x:Name="MessagesScrollViewer"
-                      Grid.Row="1"
+                      Grid.Row="2"
                       Background="{StaticResource BackgroundBrush}"
-                      Padding="10 0 10 0"
+                      Padding="18,16"
                       VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="MessagesItemsControl" ItemsSource="{Binding Messages}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:MessageItemViewModel">
-                        <Grid Margin="8,4">
-                            <StackPanel HorizontalAlignment="Left"
-                                        MaxWidth="720"
-                                        Spacing="2"
-                                        IsVisible="{Binding IsAssistantMessage}">
+                        <Grid Margin="4,0,4,18">
+                            <Grid HorizontalAlignment="Stretch"
+                                  ColumnDefinitions="32,*"
+                                  ColumnSpacing="11"
+                                  IsVisible="{Binding IsAssistantMessage}">
+                                <Border Width="32" Height="32" VerticalAlignment="Top" Background="#10A580" CornerRadius="16">
+                                    <PathIcon Width="18" Height="18" Foreground="White"
+                                              Data="M4,6 L20,6 L20,18 L14,18 L11,21 L11,18 L4,18 Z M8,10 L10,10 L10,12 L8,12 Z M14,10 L16,10 L16,12 L14,12 Z" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="6">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="{Binding Author}" Classes="AuthorName" />
                                     <TextBlock Text="{Binding TimeText}" Classes="Timestamp" />
                                 </StackPanel>
-                                <Border Classes="MessageBubbleAssistant" HorizontalAlignment="Left">
+                                <Border Classes="MessageBubbleAssistant" HorizontalAlignment="Stretch">
                                     <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="复制正文"
@@ -266,19 +362,24 @@
                                                Text="{Binding UsageSummaryText}"
                                                TextWrapping="Wrap" />
                                 </Border>
-                            </StackPanel>
-
-                            <StackPanel HorizontalAlignment="Right"
-                                        MaxWidth="720"
-                                        Spacing="2"
-                                        IsVisible="{Binding IsUserMessage}">
-                                <StackPanel Orientation="Horizontal"
-                                            HorizontalAlignment="Right"
-                                            Spacing="8">
-                                    <TextBlock Text="{Binding TimeText}" Classes="Timestamp" />
-                                    <TextBlock Text="{Binding Author}" Classes="AuthorName" />
                                 </StackPanel>
-                                <Border Classes="MessageBubbleUser" HorizontalAlignment="Right">
+                            </Grid>
+
+                            <Grid HorizontalAlignment="Stretch"
+                                  ColumnDefinitions="32,*"
+                                  ColumnSpacing="11"
+                                  IsVisible="{Binding IsUserMessage}">
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Left"
+                                        MaxWidth="780"
+                                        Spacing="2"
+                                        IsVisible="True">
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Left"
+                                            Spacing="8">
+                                    <TextBlock Text="{Binding Author}" Classes="AuthorName" />
+                                    <TextBlock Text="{Binding TimeText}" Classes="Timestamp" />
+                                </StackPanel>
+                                <Border Classes="MessageBubbleUser" HorizontalAlignment="Left">
                                     <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="复制正文"
@@ -293,6 +394,11 @@
                                                   ItemTemplate="{StaticResource UserMessageItemTemplateSelector}" />
                                 </Border>
                             </StackPanel>
+                            <Border Width="32" Height="32" VerticalAlignment="Top" Background="#6264FF" CornerRadius="16">
+                                <PathIcon Width="17" Height="17" Foreground="White"
+                                          Data="M12,3 A5,5 0 1 0 12,13 A5,5 0 1 0 12,3 M4,22 C4,17 8,15 12,15 C16,15 20,17 20,22 Z" />
+                            </Border>
+                            </Grid>
 
                             <Border Classes="MessageBubbleSystem"
                                     HorizontalAlignment="Center"
@@ -319,117 +425,115 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Border Grid.Row="2"
-                Padding="12,8"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="0,1,0,0">
-            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
-                <StackPanel Grid.Row="0"
-                            Grid.Column="0"
-                            Grid.ColumnSpan="7"
-                            Margin="0,0,0,8"
-                            HorizontalAlignment="Left"
-                            Orientation="Horizontal"
-                            Spacing="8">
-                    <Button x:Name="StopLanguageServerButton"
-                            Padding="12,6"
-                            Content="{StaticResource StopLanguageServerText}"
-                            Command="{Binding StopLanguageServerCommand}"
-                            ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
-                    <CheckBox x:Name="EnableDotNetRunCheckBox"
-                              VerticalAlignment="Center"
-                              Content="{StaticResource EnableDotNetRunText}"
-                              IsChecked="{Binding IsDotNetRunEnabled}"
-                              ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
-                </StackPanel>
-                <ItemsControl Grid.Row="1"
-                              Grid.Column="0"
-                              Grid.ColumnSpan="7"
-                              Margin="0,0,0,8"
+        <Border Grid.Row="3" Classes="ChatComposer" Padding="16,10">
+            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                <ItemsControl Grid.Row="0"
                               ItemsSource="{Binding PendingImages}"
                               IsVisible="{Binding HasPendingImages}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ImageAttachmentViewModel">
-                                <Border Margin="0,0,8,8"
-                                        Padding="4"
-                                        Background="{StaticResource SurfaceVariantBrush}"
-                                        CornerRadius="6">
-                                    <Grid>
-                                        <views:BinaryImage Width="96"
-                                                           Height="72"
-                                                           Data="{Binding Data}"
-                                                           ToolTip.Tip="{Binding FileName}" />
-                                        <Button Width="24"
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ImageAttachmentViewModel">
+                            <Border Margin="0,0,8,0"
+                                    Padding="5"
+                                    Background="{StaticResource SurfaceVariantBrush}"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="7">
+                                <Grid RowDefinitions="Auto,Auto">
+                                    <views:BinaryImage Width="92"
+                                                       Height="64"
+                                                       Data="{Binding Data}"
+                                                       ToolTip.Tip="{Binding FileName}" />
+                                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="2,4,0,0">
+                                        <TextBlock Text="{Binding FileName}"
+                                                   MaxWidth="72"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding FileName}" />
+                                        <Button Grid.Column="1"
+                                                Classes="Icon"
+                                                Width="24"
                                                 Height="24"
-                                                HorizontalAlignment="Right"
-                                                VerticalAlignment="Top"
-                                                Padding="0"
+                                                MinHeight="24"
                                                 Content="×"
                                                 ToolTip.Tip="{StaticResource RemoveImageText}"
                                                 Click="RemoveImageButton_OnClick"
                                                 CommandParameter="{Binding}" />
                                     </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Grid.Row="2"
-                        Grid.Column="0"
-                        Classes="Flat"
-                        Content="{StaticResource AddImageText}"
-                        Click="AddImageButton_OnClick" />
-                <TextBox Grid.Row="2"
-                          Grid.Column="1"
-                          x:Name="MessageInputTextBox"
-                         Classes="Rounded"
-                         Margin="8,0,0,0"
-                         Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
-                         PlaceholderText="{StaticResource MessageInputPlaceholder}"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         MaxHeight="120" />
-                <CheckBox Grid.Row="2"
-                          Grid.Column="2"
-                          x:Name="LoopIterationCheckBox"
-                          Margin="8,0,0,0"
-                          VerticalAlignment="Center"
-                          Content="{StaticResource LoopIterationText}"
-                          IsChecked="{Binding IsLoopIterationEnabled}" />
-                <CheckBox Grid.Row="2"
-                          Grid.Column="3"
-                          x:Name="AutomaticCompressionCheckBox"
-                          Margin="8,0,0,0"
-                          VerticalAlignment="Center"
-                          Content="{StaticResource AutomaticCompressionText}"
-                          IsChecked="{Binding IsAutomaticCompressionEnabled}" />
-                <Button Grid.Row="2"
-                        Grid.Column="4"
-                        Classes="Primary"
-                        Content="{Binding SendButtonText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding SendCommand}"
-                        IsEnabled="{Binding CanSend}" />
-                <Button Grid.Row="2"
-                        Grid.Column="5"
-                        x:Name="CompressConversationButton"
-                        Classes="Flat"
-                        Content="{StaticResource CompressConversationText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding CompressConversationCommand}"
-                        IsEnabled="{Binding CanCompressConversation}" />
-                <Button Grid.Row="2"
-                        Grid.Column="6"
-                        Classes="Danger"
-                        Content="{StaticResource StopText}"
-                        Margin="8,0,0,0"
-                        Command="{Binding StopCommand}"
-                        IsVisible="{Binding IsRunning}" />
+
+                <Grid Grid.Row="1" ColumnDefinitions="*,112" ColumnSpacing="10">
+                    <Grid RowDefinitions="*,Auto">
+                        <TextBox x:Name="MessageInputTextBox"
+                                 Classes="ChatInput"
+                                 Text="{Binding InputText, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="{StaticResource MessageInputPlaceholder}" />
+                        <TextBlock Grid.Row="1"
+                                   Margin="12,4,0,0"
+                                   Text="{StaticResource InputShortcutText}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   IsHitTestVisible="False" />
+                    </Grid>
+                    <Button Grid.Column="1"
+                            MinHeight="64"
+                            Classes="Primary"
+                            Command="{Binding SendCommand}"
+                            IsEnabled="{Binding CanSend}">
+                        <StackPanel Spacing="5" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Width="17" Height="17" Data="M2,3 L22,12 L2,21 L6,13 L15,12 L6,11 Z" />
+                                <TextBlock Text="{Binding SendButtonText}" />
+                            </StackPanel>
+                            <TextBlock Text="Ctrl + Enter" FontSize="10" Opacity="0.75" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <Button Grid.Column="0"
+                            Classes="Secondary"
+                            Content="{StaticResource AddImageText}"
+                            Click="AddImageButton_OnClick" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Spacing="10">
+                        <CheckBox x:Name="LoopIterationCheckBox"
+                                  Content="{StaticResource LoopIterationText}"
+                                  IsChecked="{Binding IsLoopIterationEnabled}"
+                                  IsEnabled="{Binding !IsWorking}" />
+                        <CheckBox x:Name="AutomaticCompressionCheckBox"
+                                  Content="{StaticResource AutomaticCompressionText}"
+                                  IsChecked="{Binding IsAutomaticCompressionEnabled}"
+                                  IsEnabled="{Binding !IsWorking}" />
+                        <CheckBox x:Name="EnableDotNetRunCheckBox"
+                                  Content="{StaticResource EnableDotNetRunText}"
+                                  IsChecked="{Binding IsDotNetRunEnabled}"
+                                  IsEnabled="{Binding !IsWorking}"
+                                  ToolTip.Tip="{StaticResource EnableDotNetRunToolTip}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="CompressConversationButton"
+                                Classes="Secondary"
+                                Content="{StaticResource CompressConversationText}"
+                                Command="{Binding CompressConversationCommand}"
+                                IsEnabled="{Binding CanCompressConversation}" />
+                        <Button x:Name="StopLanguageServerButton"
+                                Classes="Ghost"
+                                Content="{StaticResource StopLanguageServerText}"
+                                Command="{Binding StopLanguageServerCommand}"
+                                ToolTip.Tip="{StaticResource StopLanguageServerToolTip}" />
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Grid>
